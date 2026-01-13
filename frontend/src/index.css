@@ -21,3 +21,29 @@ body {
 #root {
   min-height: 100vh;
 }
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  height: 12px;
+  width: 12px;
+}
+
+::-webkit-scrollbar-track {
+  background: #191919;
+  border-radius: 0;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #404040;
+  border-radius: 6px;
+  border: 2px solid #191919;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #505050;
+}
+
+/* For Firefox */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #404040 #191919;
+}
