@@ -1,16 +1,22 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import AddPropertyModal from '../components/AddPropertyModal'
+import InlineFilter from '../components/InlineFilter'
 import {
   useReactTable,
   getCoreRowModel,
   getSortedRowModel,
+  getFilteredRowModel,
   flexRender,
   type ColumnDef,
   type SortingState,
   type RowSelectionState,
+  type ColumnFiltersState,
+  type VisibilityState,
 } from '@tanstack/react-table'
 import { ArrowUpDown } from 'lucide-react'
+import RowActionsMenu from '../components/RowActionsMenu'
+
 interface Database {
   id: string
   title: string
@@ -33,6 +39,13 @@ interface Page {
   created_at: number
 }
 
+interface FilterRule {
+  id: string
+  propertyId: string
+  operator: string
+  value: string
+}
+
 export default function DatabasePage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
@@ -53,6 +66,12 @@ export default function DatabasePage() {
   // TanStack Table states
   const [sorting, setSorting] = useState<SortingState>([])
   const [rowSelection, setRowSelection] = useState<RowSelectionState>({})
+  const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
+  const [globalFilter, setGlobalFilter] = useState('')
+  const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({})
+  
+  // Inline filters
+  const [filters, setFilters] = useState<FilterRule[]>([])
 
   // Handlers
   const handleAddPage = async () => {
@@ -61,7 +80,7 @@ export default function DatabasePage() {
       const response = await fetch('http://localhost:8000/pages', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ parent_id: id, title: 'Untitled' })
+        body: JSON.stringify({ parent_id: id, title: 'Başlıksız' })
       })
       if (response.ok) {
         const newPage = await response.json()
@@ -112,7 +131,7 @@ export default function DatabasePage() {
     if (selectedRowIndices.length === 0) return
     
     const selectedPages = selectedRowIndices.map(idx => pages[parseInt(idx)])
-    if (!confirm(`Delete ${selectedPages.length} page(s)?`)) return
+    if (!confirm(`${selectedPages.length} sayfa silinsin mi?`)) return
 
     try {
       await Promise.all(
@@ -127,22 +146,97 @@ export default function DatabasePage() {
     }
   }
 
+  // Apply filters to pages
+  const filteredPages = useMemo(() => {
+    if (filters.length === 0) return pages
+
+    return pages.filter(page => {
+      return filters.every(filter => {
+        const value = pageValues[page.id]?.[filter.propertyId]
+        const property = properties.find(p => p.id === filter.propertyId)
+
+        if (!property) return true
+
+        // Boş değer kontrolü - değer girilmemişse skip et
+        const needsValue = !['is_empty', 'is_not_empty', 'is_checked', 'is_not_checked'].includes(filter.operator)
+        if (needsValue && !filter.value) return true
+
+        switch (filter.operator) {
+          case 'is_empty':
+            return !value || (typeof value === 'object' && Object.keys(value).length === 0)
+          
+          case 'is_not_empty':
+            return value && (typeof value !== 'object' || Object.keys(value).length > 0)
+          
+          case 'is_checked':
+            return value?.checked === true
+          
+          case 'is_not_checked':
+            return value?.checked !== true
+          
+          case 'contains':
+            return value?.text?.toLowerCase().includes(filter.value.toLowerCase())
+          
+          case 'not_contains':
+            return !value?.text?.toLowerCase().includes(filter.value.toLowerCase())
+          
+          case 'is':
+            if (property.type === 'text') return value?.text === filter.value
+            if (property.type === 'select') return value?.option_id === filter.value
+            if (property.type === 'date') return value?.date === filter.value
+            return false
+          
+          case 'is_not':
+            if (property.type === 'text') return value?.text !== filter.value
+            if (property.type === 'select') return value?.option_id !== filter.value
+            return false
+          
+          case 'equals':
+            return value?.number === parseFloat(filter.value)
+          
+          case 'not_equals':
+            return value?.number !== parseFloat(filter.value)
+          
+          case 'greater_than':
+            return value?.number > parseFloat(filter.value)
+          
+          case 'less_than':
+            return value?.number < parseFloat(filter.value)
+          
+          case 'is_before':
+            return value?.date && new Date(value.date) < new Date(filter.value)
+          
+          case 'is_after':
+            return value?.date && new Date(value.date) > new Date(filter.value)
+          
+          default:
+            return true
+        }
+      })
+    })
+  }, [pages, pageValues, filters, properties])
+
   // Column Definitions
   const columns = useMemo<ColumnDef<Page>[]>(() => {
     const cols: ColumnDef<Page>[] = [
-     // Selection Column - 3 NOKTA MENÜ
+      // Selection Column
       {
         id: 'select',
-        header: () => <span className="text-notion-muted">⋯</span>,
+        header: () => null,
         cell: ({ row }) => (
-          <div className="group relative flex items-center justify-center">
-            <button 
-              className="opacity-0 group-hover:opacity-100 text-notion-muted hover:text-white transition-opacity"
-              onClick={() => row.toggleSelected()}
-            >
-              {row.getIsSelected() ? '☑' : '⋯'}
-            </button>
-          </div>
+          <RowActionsMenu
+            isSelected={row.getIsSelected()}
+            onToggleSelect={() => row.toggleSelected()}
+            onDelete={async () => {
+              if (!confirm('Bu sayfayı silmek istediğinize emin misiniz?')) return
+              try {
+                await fetch(`http://localhost:8000/pages/${row.original.id}`, { method: 'DELETE' })
+                setPages(pages.filter(p => p.id !== row.original.id))
+              } catch (err) {
+                console.error('Failed to delete page:', err)
+              }
+            }}
+          />
         ),
         size: 50,
         enableSorting: false,
@@ -156,7 +250,7 @@ export default function DatabasePage() {
             onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
             className="flex items-center gap-2 hover:text-white transition-colors"
           >
-            📄 Title
+            📄 Başlık
             <ArrowUpDown size={14} />
           </button>
         ),
@@ -203,7 +297,6 @@ export default function DatabasePage() {
         accessorFn: (row) => {
           const val = pageValues[row.id]?.[prop.id]
           
-          // SORTING FIX: Select için option name'e göre sırala
           if (prop.type === 'select' && val?.option_id) {
             const config = prop.config ? JSON.parse(prop.config) : null
             const option = config?.options?.find((o: any) => o.id === val.option_id)
@@ -235,7 +328,6 @@ export default function DatabasePage() {
                            editingCell?.field === 'property' && 
                            editingCell?.propertyId === prop.id
 
-          // Render cell based on type
           if (prop.type === 'select') {
             return isEditing ? (
               <select
@@ -245,7 +337,7 @@ export default function DatabasePage() {
                 autoFocus
                 className="w-full bg-notion-bg text-white border border-notion-border rounded px-2 py-1 text-sm outline-none"
               >
-                <option value="">Empty</option>
+                <option value="">Boş</option>
                 {prop.config && JSON.parse(prop.config).options?.map((opt: any) => (
                   <option key={opt.id} value={opt.id}>{opt.name}</option>
                 ))}
@@ -270,7 +362,7 @@ export default function DatabasePage() {
                     brown: 'bg-amber-700 bg-opacity-20 text-amber-400',
                   }
                   return <span className={`px-2 py-1 rounded text-xs ${colorMap[option?.color] || colorMap.gray}`}>{option?.name || value.option_id}</span>
-                })() : <span className="text-notion-muted text-sm italic">Empty</span>}
+                })() : <span className="text-notion-muted text-sm italic">Boş</span>}
               </div>
             )
           }
@@ -297,7 +389,7 @@ export default function DatabasePage() {
                 }}
                 className="cursor-text hover:bg-notion-hover px-1 -mx-1 rounded min-h-[24px]"
               >
-                {value?.text ? <span className="text-white text-sm">{value.text}</span> : <span className="text-notion-muted text-sm italic">Empty</span>}
+                {value?.text ? <span className="text-white text-sm">{value.text}</span> : <span className="text-notion-muted text-sm italic">Boş</span>}
               </div>
             )
           }
@@ -324,7 +416,7 @@ export default function DatabasePage() {
                 }}
                 className="cursor-text hover:bg-notion-hover px-1 -mx-1 rounded min-h-[24px]"
               >
-                {value?.number !== undefined ? <span className="text-white text-sm">{value.number}</span> : <span className="text-notion-muted text-sm italic">Empty</span>}
+                {value?.number !== undefined ? <span className="text-white text-sm">{value.number}</span> : <span className="text-notion-muted text-sm italic">Boş</span>}
               </div>
             )
           }
@@ -362,7 +454,7 @@ export default function DatabasePage() {
                     {new Date(value.date).toLocaleDateString('tr-TR', { year: 'numeric', month: 'short', day: 'numeric' })}
                   </span>
                 ) : (
-                  <span className="text-notion-muted text-sm italic">Empty</span>
+                  <span className="text-notion-muted text-sm italic">Boş</span>
                 )}
               </div>
             )
@@ -381,7 +473,7 @@ export default function DatabasePage() {
                 autoFocus
                 className="w-full bg-notion-bg text-white border border-notion-border rounded px-2 py-1 text-sm outline-none"
               >
-                <option value="">Add option...</option>
+                <option value="">Seçenek ekle...</option>
                 {prop.config && JSON.parse(prop.config).options?.map((opt: any) => (
                   <option key={opt.id} value={opt.id}>{opt.name}</option>
                 ))}
@@ -427,12 +519,12 @@ export default function DatabasePage() {
                       </span>
                     )
                   })
-                })() : <span className="text-notion-muted text-sm italic">Empty</span>}
+                })() : <span className="text-notion-muted text-sm italic">Boş</span>}
               </div>
             )
           }
 
-          return <span className="text-notion-muted text-sm italic">Empty</span>
+          return <span className="text-notion-muted text-sm italic">Boş</span>
         },
         size: 200,
         enableSorting: true,
@@ -440,21 +532,29 @@ export default function DatabasePage() {
     })
 
     return cols
-  }, [properties, pageValues, editingCell, editValue])
+  }, [properties, pageValues, editingCell, editValue, pages])
 
   // Create Table Instance
   const table = useReactTable({
-    data: pages,
+    data: filteredPages,
     columns,
     state: {
       sorting,
       rowSelection,
+      columnFilters,
+      globalFilter,
+      columnVisibility,
     },
     enableRowSelection: true,
     onSortingChange: setSorting,
     onRowSelectionChange: setRowSelection,
+    onColumnFiltersChange: setColumnFilters,
+    onGlobalFilterChange: setGlobalFilter,
+    onColumnVisibilityChange: setColumnVisibility,
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
+    getFilteredRowModel: getFilteredRowModel(),
+    globalFilterFn: 'includesString',
   })
 
   // Fetch data
@@ -494,7 +594,7 @@ export default function DatabasePage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
-        <div className="text-notion-muted">Loading database...</div>
+        <div className="text-notion-muted">Yükleniyor...</div>
       </div>
     )
   }
@@ -502,7 +602,7 @@ export default function DatabasePage() {
   if (!database) {
     return (
       <div className="flex items-center justify-center min-h-screen">
-        <div className="text-red-500">Database not found</div>
+        <div className="text-red-500">Veritabanı bulunamadı</div>
       </div>
     )
   }
@@ -515,7 +615,7 @@ export default function DatabasePage() {
         onClick={() => navigate('/')}
         className="mb-4 px-3 py-1 bg-notion-panel border border-notion-border rounded hover:bg-notion-hover transition-colors text-notion-muted hover:text-white"
       >
-        ← Back to databases
+        ← Veritabanlarına Dön
       </button>
       
       <div className="max-w-6xl mx-auto">
@@ -529,25 +629,79 @@ export default function DatabasePage() {
             onClick={() => setShowAddPropertyModal(true)}
             className="ml-auto px-3 py-1 bg-notion-panel border border-notion-border rounded hover:bg-notion-hover transition-colors text-white text-sm"
           >
-            + Add Property
+            + Özellik Ekle
           </button>
+        </div>
+
+        {/* Toolbar: Search + Filter + Column Visibility */}
+        <div className="mb-4 flex items-center gap-3">
+          {/* Global Search */}
+          <div className="w-80">
+            <input
+              type="text"
+              value={globalFilter ?? ''}
+              onChange={(e) => setGlobalFilter(e.target.value)}
+              placeholder="Ara..."
+              className="w-full px-4 py-2 bg-notion-panel border border-notion-border rounded-lg text-white placeholder-notion-muted outline-none focus:border-blue-500 transition-colors"
+            />
+          </div>
+
+          {/* Inline Filter */}
+          <InlineFilter
+            properties={properties}
+            filters={filters}
+            onFiltersChange={setFilters}
+          />
+
+          {/* Column Visibility Dropdown */}
+          <div className="relative group">
+            <button className="px-4 py-2 bg-notion-panel border border-notion-border rounded-lg text-white hover:bg-notion-hover transition-colors flex items-center gap-2">
+              <span>Sütunlar</span>
+              <span className="text-xs">▼</span>
+            </button>
+            
+            <div className="absolute right-0 top-12 w-56 bg-notion-panel border border-notion-border rounded-lg shadow-xl py-2 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
+              <div className="px-3 py-1 text-xs text-notion-muted font-semibold">Görünür Sütunlar</div>
+              <div className="border-t border-notion-border my-1" />
+              {table.getAllLeafColumns().filter(col => col.id !== 'select').map(column => {
+                const columnName = column.id === 'title' 
+                  ? 'Başlık' 
+                  : properties.find(p => p.id === column.id)?.name || column.id
+                
+                return (
+                  <label
+                    key={column.id}
+                    className="flex items-center gap-2 px-3 py-2 hover:bg-notion-hover cursor-pointer"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={column.getIsVisible()}
+                      onChange={column.getToggleVisibilityHandler()}
+                      className="w-4 h-4 cursor-pointer accent-blue-500"
+                    />
+                    <span className="text-sm text-white">{columnName}</span>
+                  </label>
+                )
+              })}
+            </div>
+          </div>
         </div>
 
         {/* Selection Toolbar */}
         {selectedCount > 0 && (
           <div className="mb-4 px-4 py-2 bg-blue-600 bg-opacity-20 border border-blue-500 rounded flex items-center justify-between">
-            <span className="text-blue-400 font-medium">{selectedCount} selected</span>
+            <span className="text-blue-400 font-medium">{selectedCount} seçildi</span>
             <button
               onClick={handleDeleteSelected}
               className="px-3 py-1 bg-red-600 hover:bg-red-700 rounded text-white text-sm transition-colors"
             >
-              Delete Selected
+              Seçilenleri Sil
             </button>
           </div>
         )}
 
         {/* TABLE */}
-        <div className="border border-notion-border rounded-lg overflow-hidden mb-4">
+        <div className="border border-notion-border rounded-lg mb-4">
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead className="bg-notion-bg border-b border-notion-border">
@@ -569,14 +723,17 @@ export default function DatabasePage() {
                 {table.getRowModel().rows.length === 0 ? (
                   <tr>
                     <td colSpan={columns.length} className="px-4 py-12 text-center text-notion-muted">
-                      No pages yet. Click "+ Add Page" to create your first row.
+                      {filters.length > 0 
+                        ? 'Filtre kriterlerine uyan sayfa bulunamadı.'
+                        : 'Henüz sayfa yok. İlk sayfayı oluşturmak için "+ Yeni Sayfa" butonuna tıklayın.'
+                      }
                     </td>
                   </tr>
                 ) : (
                   table.getRowModel().rows.map(row => (
                     <tr
                       key={row.id}
-                      className="border-b border-notion-border last:border-b-0 hover:bg-notion-hover transition-colors"
+                      className="border-b border-notion-border last:border-b-0 hover:bg-notion-hover transition-colors group"
                     >
                       {row.getVisibleCells().map(cell => (
                         <td
@@ -595,12 +752,20 @@ export default function DatabasePage() {
           </div>
         </div>
 
+        {/* Sonuçlar */}
+        <div className="mb-4 text-sm text-notion-muted">
+          {table.getFilteredRowModel().rows.length} / {pages.length} sayfa gösteriliyor
+          {filters.length > 0 && (
+            <span className="ml-2 text-blue-400">({filters.length} filtre aktif)</span>
+          )}
+        </div>
+
         {/* Add Page Button */}
         <button 
           onClick={handleAddPage}
           className="px-4 py-2 bg-notion-panel border border-notion-border rounded hover:bg-notion-hover transition-colors text-white text-sm font-medium"
         >
-          + Add Page
+          + Yeni Sayfa
         </button>
 
         {/* Add Property Modal */}
