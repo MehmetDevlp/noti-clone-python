@@ -20,7 +20,6 @@ class Database(Base):
     created_at = Column(Integer, default=current_timestamp)
     updated_at = Column(Integer, default=current_timestamp, onupdate=current_timestamp)
     
-    # Relationships
     properties = relationship("DatabaseProperty", back_populates="database", cascade="all, delete-orphan")
     pages = relationship("Page", back_populates="database", cascade="all, delete-orphan")
 
@@ -30,14 +29,13 @@ class DatabaseProperty(Base):
     id = Column(String, primary_key=True, default=generate_id)
     database_id = Column(String, ForeignKey("databases.id", ondelete="CASCADE"), nullable=False)
     name = Column(String, nullable=False)
-    type = Column(String, nullable=False)  # 'text', 'number', 'select', etc.
-    config = Column(Text, nullable=True)  # JSON string
+    type = Column(String, nullable=False)
+    config = Column(Text, nullable=True)
     order_index = Column(Integer, nullable=False)
     visible = Column(Boolean, default=True)
     created_at = Column(Integer, default=current_timestamp)
     updated_at = Column(Integer, default=current_timestamp, onupdate=current_timestamp)
     
-    # Relationships
     database = relationship("Database", back_populates="properties")
     values = relationship("PageProperty", back_populates="property", cascade="all, delete-orphan")
 
@@ -49,10 +47,10 @@ class Page(Base):
     parent_type = Column(String, default="database")
     title = Column(String, nullable=False, default="Untitled")
     icon = Column(String, nullable=True)
+    content = Column(Text, nullable=True, default="[]") # BU SÜTUN ŞART
     created_at = Column(Integer, default=current_timestamp)
     updated_at = Column(Integer, default=current_timestamp, onupdate=current_timestamp)
     
-    # Relationships
     database = relationship("Database", back_populates="pages")
     properties = relationship("PageProperty", back_populates="page", cascade="all, delete-orphan")
 
@@ -62,8 +60,7 @@ class PageProperty(Base):
     id = Column(String, primary_key=True, default=generate_id)
     page_id = Column(String, ForeignKey("pages.id", ondelete="CASCADE"), nullable=False)
     property_id = Column(String, ForeignKey("database_properties.id", ondelete="CASCADE"), nullable=False)
-    value = Column(Text, nullable=True)  # JSON string
+    value = Column(Text, nullable=True)
     
-    # Relationships
     page = relationship("Page", back_populates="properties")
     property = relationship("DatabaseProperty", back_populates="values")

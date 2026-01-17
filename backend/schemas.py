@@ -25,7 +25,7 @@ class DatabaseResponse(BaseModel):
 class PropertyCreate(BaseModel):
     database_id: str
     name: str
-    type: str  # 'text', 'number', 'select', 'multi_select', 'date', 'checkbox', 'status'
+    type: str
     config: Optional[dict] = {}
     order_index: int = 0
     visible: bool = True
@@ -42,7 +42,7 @@ class PropertyResponse(BaseModel):
     database_id: str
     name: str
     type: str
-    config: Optional[str]  # JSON string
+    config: Optional[str]
     order_index: int
     visible: bool
     created_at: int
@@ -54,13 +54,15 @@ class PropertyResponse(BaseModel):
 # ========== PAGE SCHEMAS ==========
 
 class PageCreate(BaseModel):
-    parent_id: str  # database_id
+    parent_id: str
     title: str = "Untitled"
     icon: Optional[str] = None
+    # content burada yok çünkü yeni sayfa boş başlar
 
 class PageUpdate(BaseModel):
     title: Optional[str] = None
     icon: Optional[str] = None
+    content: Optional[str] = None # BU EKSİKTİ: Editörden gelen yazıyı kaydetmek için şart!
 
 class PageResponse(BaseModel):
     id: str
@@ -68,6 +70,7 @@ class PageResponse(BaseModel):
     parent_type: str
     title: str
     icon: Optional[str]
+    content: Optional[str] # BU EKSİKTİ: Editöre veriyi göndermek için şart!
     created_at: int
     updated_at: int
     
@@ -79,13 +82,13 @@ class PageResponse(BaseModel):
 class PropertyValueSet(BaseModel):
     page_id: str
     property_id: str
-    value: Any  # Can be dict, string, number, etc.
+    value: Any
 
 class PropertyValueResponse(BaseModel):
     id: str
     page_id: str
     property_id: str
-    value: Optional[str]  # JSON string
+    value: Optional[str]
     
     class Config:
         from_attributes = True
