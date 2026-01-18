@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { X, Type, List, CheckSquare, Calendar, Tag } from 'lucide-react'
+import { X, Type, List, CheckSquare, Calendar, Tag, AlertCircle } from 'lucide-react'
 
 const TYPE_ICONS = {
   text: <Type size={16} />,
@@ -27,16 +27,24 @@ interface AddPropertyModalProps {
 
 export default function AddPropertyModal({ databaseId, onClose, onSuccess }: AddPropertyModalProps) {
   const [name, setName] = useState('')
-  const [selectedType, setSelectedType] = useState('status') // Varsayılan Status olsun
+  const [selectedType, setSelectedType] = useState('status') 
   const [isLoading, setIsLoading] = useState(false)
+  
+  // YENİ: Hata durumu için state
+  const [error, setError] = useState<string | null>(null)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!name.trim()) { alert("Lütfen bir isim giriniz."); return; }
+    
+    // YENİ: Doğrulama (Validation)
+    if (!name.trim()) {
+       setError("Lütfen bir özellik ismi giriniz.")
+       return
+    }
 
     setIsLoading(true)
+    setError(null) // Hatayı temizle
 
-    // ÖZEL AYARLAR: Eğer Status seçildiyse varsayılan seçenekleri oluştur
     let initialConfig = {}
     if (selectedType === 'status') {
         initialConfig = {
@@ -56,7 +64,7 @@ export default function AddPropertyModal({ databaseId, onClose, onSuccess }: Add
           database_id: databaseId,
           name: name,
           type: selectedType,
-          config: initialConfig // Dolu config gönderiyoruz
+          config: initialConfig
         })
       })
 
@@ -66,18 +74,27 @@ export default function AddPropertyModal({ databaseId, onClose, onSuccess }: Add
       onSuccess(data)
       onClose()
     } catch (err: any) {
-      alert("Hata: " + err.message)
+      setError("Bir hata oluştu: " + err.message)
     } finally {
       setIsLoading(false)
     }
   }
 
+  // Input değişince hatayı temizle
+  const handleNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+      setName(e.target.value)
+      if (error) setError(null)
+  }
+
   return (
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={onClose}>
-      <div className="w-[400px] bg-[#202020] border border-[#373737] rounded-xl shadow-2xl overflow-hidden flex flex-col" onClick={e => e.stopPropagation()}>
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 backdrop-blur-sm animate-in fade-in duration-200" onClick={onClose}>
+      <div 
+        className="w-[400px] bg-[#202020] border border-[#373737] rounded-xl shadow-2xl overflow-hidden flex flex-col animate-in zoom-in-95 duration-200" 
+        onClick={e => e.stopPropagation()}
+      >
         <div className="p-4 border-b border-[#373737] flex items-center justify-between">
           <span className="text-sm font-semibold text-gray-300">Yeni Özellik Ekle</span>
-          <button onClick={onClose} className="text-gray-500 hover:text-white"><X size={16} /></button>
+          <button onClick={onClose} className="text-gray-500 hover:text-white transition-colors"><X size={16} /></button>
         </div>
         
         <form onSubmit={handleSubmit} className="p-4 flex flex-col gap-4">
@@ -87,10 +104,18 @@ export default function AddPropertyModal({ databaseId, onClose, onSuccess }: Add
               autoFocus
               type="text" 
               value={name}
-              onChange={(e) => setName(e.target.value)}
-              className="w-full bg-[#151515] border border-[#373737] rounded p-2 text-white text-sm outline-none focus:border-blue-500 transition-colors"
+              onChange={handleNameChange}
+              // YENİ: Hata varsa border kırmızı oluyor
+              className={`w-full bg-[#151515] border rounded p-2 text-white text-sm outline-none transition-colors ${error ? 'border-red-500 focus:border-red-500' : 'border-[#373737] focus:border-blue-500'}`}
               placeholder="Örn: Durum, Öncelik..."
             />
+            {/* YENİ: Hata mesajı */}
+            {error && (
+                <div className="flex items-center gap-1 mt-1 text-red-400 text-xs animate-in slide-in-from-top-1">
+                    <AlertCircle size={12} />
+                    <span>{error}</span>
+                </div>
+            )}
           </div>
 
           <div>
@@ -114,7 +139,7 @@ export default function AddPropertyModal({ databaseId, onClose, onSuccess }: Add
             </div>
           </div>
 
-          <button type="submit" disabled={isLoading} className="mt-2 bg-blue-600 hover:bg-blue-500 text-white py-2 rounded text-sm font-medium transition-colors">
+          <button type="submit" disabled={isLoading} className="mt-2 bg-blue-600 hover:bg-blue-500 text-white py-2 rounded text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
             {isLoading ? 'Oluşturuluyor...' : 'Oluştur'}
           </button>
         </form>
