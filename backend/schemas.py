@@ -63,9 +63,11 @@ class PageBase(BaseModel):
     content: Optional[str] = None
 
 class PageCreate(PageBase):
-    parent_id: str
+    # DEĞİŞİKLİK: parent_id gitti, database_id geldi ve opsiyonel (None olabilir) oldu.
+    database_id: Optional[str] = None
 
 class PageUpdate(BaseModel):
+    # Burası aynı kalabilir
     title: Optional[str] = None
     icon: Optional[str] = None
     cover: Optional[str] = None
@@ -73,7 +75,8 @@ class PageUpdate(BaseModel):
 
 class PageResponse(PageBase):
     id: str
-    parent_id: str
+    # DEĞİŞİKLİK: parent_id yerine database_id
+    database_id: Optional[str] = None
     created_at: int
     
     class Config:

@@ -4,10 +4,11 @@ import "@blocknote/core/fonts/inter.css";
 import { useCreateBlockNote } from "@blocknote/react";
 import { BlockNoteView } from "@blocknote/mantine";
 import "@blocknote/mantine/style.css"; 
+import { Home, Database, ChevronLeft } from "lucide-react"; // İkonları ekledik
 
 interface PageData {
   id: string;
-  parent_id: string;
+  database_id: string | null; // parent_id -> database_id olarak güncellendi ve null olabilir
   title: string;
   icon: string | null;
   cover: string | null;
@@ -22,7 +23,7 @@ export default function EditorPage() {
   const [loading, setLoading] = useState(true);
   const [title, setTitle] = useState("");
 
-  // Editörü boş başlatıyoruz
+  // Editörü başlat
   const editor = useCreateBlockNote();
 
   useEffect(() => {
@@ -37,19 +38,31 @@ export default function EditorPage() {
             setPage(data);
             setTitle(data.title || "");
 
-            // İÇERİK YÜKLEME (GÜVENLİ)
+            // --- GÜNCELLENEN KISIM ---
             if (data.content) {
+                // Eğer sayfanın kayıtlı bir içeriği varsa onu yükle
                 try {
                     const blocks = JSON.parse(data.content);
-                    // Eğer içerik doluysa editöre yükle
                     if (Array.isArray(blocks) && blocks.length > 0) {
                         editor.replaceBlocks(editor.document, blocks);
+                    } else {
+                        // İçerik array ama boşsa temizle
+                        editor.replaceBlocks(editor.document, [
+                            { type: "paragraph", content: [] }
+                        ]);
                     }
                 } catch (parseError) {
                     console.error("İçerik parse hatası:", parseError);
-                    // Hata varsa editör boş kalsın, çökmesin
                 }
+            } else {
+                // ÖNEMLİ: Eğer içerik NULL ise (Yeni Sayfa), editörü sıfırla!
+                // Bunu yapmazsak önceki sayfanın yazıları ekranda kalır.
+                editor.replaceBlocks(editor.document, [
+                    { type: "paragraph", content: [] }
+                ]);
             }
+            // -------------------------
+
         } catch (err) {
             console.error(err);
         } finally {
@@ -60,7 +73,7 @@ export default function EditorPage() {
     loadData();
   }, [id, editor]);
 
-  // --- OTOMATİK KAYDETME ---
+  // Otomatik Kaydetme
   const saveTimeoutRef = useRef<number | null>(null);
 
   const handleEditorChange = () => {
@@ -90,12 +103,15 @@ export default function EditorPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ title }),
       });
+      
+      // YENİ EKLENEN SATIR: Sidebar'ı tetikleyen sinyal
+      window.dispatchEvent(new Event('sidebar-update'));
+
     } catch (err) {
       console.error("Başlık hatası:", err);
     }
   };
 
-  // TARİH FORMATLAMA (GÜVENLİ)
   const formatDate = (timestamp: number | undefined) => {
       if (!timestamp) return "-";
       try {
@@ -105,55 +121,79 @@ export default function EditorPage() {
       }
   }
 
-  if (loading) return <div className="flex items-center justify-center min-h-screen text-notion-muted">Yükleniyor...</div>;
-  if (!page) return <div className="flex items-center justify-center min-h-screen text-white">Sayfa bulunamadı veya silinmiş.</div>;
+  if (loading) return <div className="flex items-center justify-center min-h-screen text-gray-500">Yükleniyor...</div>;
+  if (!page) return <div className="flex items-center justify-center min-h-screen text-white">Sayfa bulunamadı.</div>;
 
   return (
     <div className="min-h-screen bg-[#191919] text-white pb-32">
-      {/* NAVİGASYON */}
+      {/* --- NAVİGASYON --- */}
       <div className="sticky top-0 z-50 bg-[#191919]/80 backdrop-blur-md border-b border-[#373737] px-4 py-3 flex items-center gap-2 text-sm text-gray-400">
+        
+        {/* AKILLI GERİ BUTONU */}
         <button 
-          onClick={() => navigate(`/database/${page.parent_id}`)}
-          className="hover:text-white hover:bg-[#2C2C2C] px-2 py-1 rounded transition-colors flex items-center gap-1"
+          onClick={() => page.database_id ? navigate(`/database/${page.database_id}`) : navigate('/')}
+          className="hover:text-white hover:bg-[#2C2C2C] px-2 py-1 rounded transition-colors flex items-center gap-1 group"
         >
-          ⬅ Veritabanına Dön
+          <ChevronLeft size={16} />
+          {page.database_id ? (
+             <>
+               <Database size={14} className="text-gray-500 group-hover:text-blue-400"/>
+               <span>Veritabanına Dön</span>
+             </>
+          ) : (
+             <>
+               <Home size={14} className="text-gray-500 group-hover:text-green-400"/>
+               <span>Ana Sayfa</span>
+             </>
+          )}
         </button>
-        <span className="opacity-50">/</span>
-        <span className="text-white truncate max-w-[200px]">{title || "İsimsiz"}</span>
-        <span className="ml-auto text-xs text-green-500 animate-pulse">Otomatik Kaydediliyor</span>
+
+        <span className="opacity-30">/</span>
+        <span className="text-white truncate max-w-[200px] font-medium">{title || "İsimsiz"}</span>
+        <span className="ml-auto text-xs text-gray-600 transition-opacity duration-500" style={{opacity: saveTimeoutRef.current ? 1 : 0}}>
+            Kaydediliyor...
+        </span>
       </div>
 
-      {/* KAPAK */}
+      {/* --- KAPAK GÖRSELİ --- */}
       <div className="h-48 w-full bg-gradient-to-r from-slate-800 via-gray-800 to-slate-900 relative group">
+          {/* İlerde buraya 'Kapak Değiştir' butonu ekleyebiliriz */}
       </div>
 
       <div className="max-w-4xl mx-auto px-12 relative">
-        {/* İKON */}
+        {/* --- İKON --- */}
         <div className="-mt-10 mb-4 relative group w-20 h-20">
-          <div className="text-6xl cursor-pointer hover:bg-[#2C2C2C] rounded p-1 transition-colors">
+          <div className="text-6xl cursor-pointer hover:bg-[#2C2C2C] rounded p-1 transition-colors select-none">
             {page.icon || "📄"}
           </div>
         </div>
 
-        {/* BAŞLIK */}
-        <div className="mb-8">
+        {/* --- BAŞLIK ALANI --- */}
+        <div className="mb-6 group">
           <input
             type="text"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             onBlur={handleTitleBlur}
             placeholder="İsimsiz"
-            className="w-full text-5xl font-bold bg-transparent border-none outline-none text-white placeholder-gray-600"
+            className="w-full text-4xl font-bold bg-transparent border-none outline-none text-white placeholder-gray-600"
           />
         </div>
 
-        {/* METADATA */}
-        <div className="flex items-center gap-4 text-notion-muted text-sm mb-8 border-b border-notion-border pb-4">
-           <span>📅 Oluşturuldu: {formatDate(page.created_at)}</span>
+        {/* --- METADATA (Tarih vb.) --- */}
+        <div className="flex items-center gap-6 text-gray-500 text-xs mb-8 border-b border-[#373737] pb-4">
+           <span className="flex items-center gap-1">
+             🕒 {formatDate(page.created_at)}
+           </span>
+           {page.database_id && (
+             <span className="bg-[#2C2C2C] px-2 py-0.5 rounded text-blue-400">
+               Veritabanı Sayfası
+             </span>
+           )}
         </div>
 
-        {/* EDİTÖR */}
-        <div className="-ml-14 text-gray-200">
+        {/* --- NOTION EDİTÖRÜ --- */}
+        <div className="-ml-14 text-gray-200 editor-wrapper">
             <BlockNoteView
                 editor={editor}
                 theme="dark"

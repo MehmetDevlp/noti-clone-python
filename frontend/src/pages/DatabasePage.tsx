@@ -175,7 +175,7 @@ export default function DatabasePage() {
 
   const handleAddPage = async () => { 
       if (!id) return
-      try { const res = await fetch('http://localhost:8000/pages', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ parent_id: id, title: '' }) }); if(res.ok) { const p = await res.json(); setPages([...pages, p]) } } catch(e){console.error(e)}
+      try { const res = await fetch('http://localhost:8000/pages', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ database_id: id, title: '' }) }); if(res.ok) { const p = await res.json(); setPages([...pages, p]) } } catch(e){console.error(e)}
   }
   const handleDeleteSelected = async () => {
     const selectedIds = Object.keys(rowSelection).map(idx => pages[parseInt(idx)].id)

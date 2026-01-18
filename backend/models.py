@@ -27,7 +27,7 @@ class Property(Base):
 class Page(Base):
     __tablename__ = "pages"
     id = Column(String, primary_key=True, index=True)
-    parent_id = Column(String, ForeignKey("databases.id"))
+    database_id = Column(String, ForeignKey("databases.id"), nullable=True)
     title = Column(String)
     icon = Column(String, nullable=True)
     cover = Column(String, nullable=True)

@@ -80,6 +80,10 @@ def delete_property(property_id: str, db: Session = Depends(get_db)):
 def create_page(page: schemas.PageCreate, db: Session = Depends(get_db)):
     return crud.create_page(db, page)
 
+@app.get("/pages", response_model=list[schemas.PageResponse])
+def list_root_pages(db: Session = Depends(get_db)):
+    return crud.get_root_pages(db)
+
 @app.get("/pages/{page_id}", response_model=schemas.PageResponse)
 def get_page(page_id: str, db: Session = Depends(get_db)):
     db_page = crud.get_page(db, page_id)
