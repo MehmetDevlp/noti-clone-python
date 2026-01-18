@@ -1,5 +1,8 @@
 import { useState, useEffect, useRef } from 'react'
-import { X, Search, Check, Plus, Trash, Palette } from 'lucide-react'
+import { X, Search, Check, Plus, Trash, Palette, Circle, Loader2, CheckCircle2 } from 'lucide-react'
+
+// Sabit Gruplar
+const STATUS_GROUPS = ['To-do', 'In Progress', 'Complete']
 
 interface Option {
   id: string
@@ -84,12 +87,9 @@ export default function StatusEditModal({
     }
   }
 
-  // Renk Kontrolü (Hex mi yoksa eski tip isim mi?)
+  // Renk Kontrolü
   const getColorStyle = (color: string) => {
-    if (color.startsWith('#')) {
-      return { backgroundColor: color }
-    }
-    // Eski renk isimleri için fallback (Geri uyumluluk)
+    if (color.startsWith('#')) return { backgroundColor: color }
     const colorMap: Record<string, string> = {
       gray: '#6b7280', blue: '#3b82f6', green: '#22c55e', red: '#ef4444',
       yellow: '#eab308', orange: '#f97316', purple: '#a855f7', pink: '#ec4899', brown: '#78350f'
@@ -97,10 +97,17 @@ export default function StatusEditModal({
     return { backgroundColor: colorMap[color] || '#6b7280' }
   }
 
+  // Grup İkonları
+  const getGroupIcon = (group: string) => {
+      if (group === 'To-do') return <Circle size={12} className="text-gray-400" />
+      if (group === 'In Progress') return <Loader2 size={12} className="text-blue-400" />
+      if (group === 'Complete') return <CheckCircle2 size={12} className="text-green-400" />
+      return null
+  }
+
   const renderOptionItem = (opt: Option) => (
     <div key={opt.id} className="group flex items-center justify-between p-1.5 rounded hover:bg-[#2C2C2C] cursor-pointer transition-colors">
       <div onClick={() => handleSelect(opt)} className="flex items-center gap-2 flex-1 overflow-hidden">
-        {/* Yuvarlak Renk Göstergesi */}
         <div 
             className="w-3 h-3 rounded-full border border-white/10 shrink-0" 
             style={getColorStyle(opt.color)}
@@ -132,13 +139,18 @@ export default function StatusEditModal({
 
         {/* BODY */}
         <div className="flex-1 overflow-y-auto p-2 space-y-0.5 custom-scrollbar">
+          
+          {/* LİSTELEME MANTIĞI */}
           {propType === 'status' ? (
-             ['To-do', 'In Progress', 'Complete'].map(group => {
+             STATUS_GROUPS.map(group => {
                  const groupOptions = filteredOptions.filter(o => o.group === group)
                  if (search && groupOptions.length === 0) return null
                  return (
                      <div key={group} className="mb-2">
-                         <div className="text-[10px] font-bold text-gray-500 uppercase px-2 py-1">{group === 'To-do' ? 'Yapılacaklar' : group === 'In Progress' ? 'Devam Edenler' : 'Tamamlananlar'}</div>
+                         <div className="flex items-center gap-2 px-2 py-1 text-[10px] font-bold text-gray-500 uppercase tracking-wider">
+                            {getGroupIcon(group)}
+                            {group === 'To-do' ? 'Yapılacaklar' : group === 'In Progress' ? 'Devam Edenler' : 'Tamamlananlar'}
+                         </div>
                          <div className="pl-1">
                              {groupOptions.map(renderOptionItem)}
                              {!search && groupOptions.length === 0 && <div className="text-[10px] text-gray-600 px-2 italic">Boş</div>}
@@ -154,36 +166,51 @@ export default function StatusEditModal({
               <div className="text-xs text-gray-500 text-center py-4 italic">Henüz seçenek yok.</div>
           )}
 
-          {/* OLUŞTURMA BÖLÜMÜ (RENK SEÇİCİLİ) */}
+          {/* --- OLUŞTURMA BÖLÜMÜ (HEM RENK SEÇİCİ HEM GRUP SEÇİCİ) --- */}
           {search && !filteredOptions.some(o => o.name.toLowerCase() === search.toLowerCase()) && (
             <div className="mt-2 border-t border-[#373737]/50 pt-3 px-2">
+                
+                {/* 1. Renk Seçici (Her zaman görünür) */}
                 <div className="flex items-center justify-between mb-3">
                     <span className="text-[10px] text-gray-500 uppercase font-bold">Renk Seç</span>
                     <div className="flex items-center gap-2">
-                        {/* Renk Önizlemesi */}
                         <div className="w-4 h-4 rounded-full border border-white/20" style={{ backgroundColor: selectedColor }}></div>
-                        
-                        {/* Native Color Picker */}
                         <label className="cursor-pointer bg-[#2C2C2C] hover:bg-[#373737] text-white text-xs px-2 py-1 rounded border border-[#373737] flex items-center gap-1 transition-colors">
                             <Palette size={12} />
                             <span>Özel</span>
-                            <input 
-                                type="color" 
-                                value={selectedColor}
-                                onChange={(e) => setSelectedColor(e.target.value)}
-                                className="w-0 h-0 opacity-0 absolute" // Gizli input, label tetikler
-                            />
+                            <input type="color" value={selectedColor} onChange={(e) => setSelectedColor(e.target.value)} className="w-0 h-0 opacity-0 absolute" />
                         </label>
                     </div>
                 </div>
 
-                <div 
-                    onClick={() => { onCreate(search, selectedColor); setSearch('') }} 
-                    className="flex items-center gap-2 p-2 rounded bg-blue-500/10 hover:bg-blue-500/20 cursor-pointer text-blue-300 hover:text-blue-200 border border-blue-500/30 transition-all"
-                >
-                    <div className="flex items-center justify-center w-5 h-5 rounded-full bg-blue-500 text-white shadow-sm"><Plus size={14} /></div>
-                    <span className="text-sm font-medium">Oluştur: "{search}"</span>
-                </div>
+                {/* 2. Ekleme Butonları (Tipe göre değişir) */}
+                {propType === 'status' ? (
+                    // STATUS İSE: 3 FARKLI GRUP BUTONU
+                    <div className="flex flex-col gap-1">
+                        <span className="text-[10px] text-gray-500 uppercase font-bold mb-1">Şuraya Ekle:</span>
+                        {STATUS_GROUPS.map(group => (
+                            <div 
+                                key={group}
+                                onClick={() => { onCreate(search, selectedColor, group); setSearch('') }} 
+                                className="flex items-center gap-2 p-2 rounded bg-[#2C2C2C] hover:bg-[#373737] cursor-pointer transition-all border border-transparent hover:border-blue-500/30"
+                            >
+                                <div className="flex items-center justify-center w-4 h-4 rounded-full bg-blue-500/20 text-blue-400"><Plus size={10} /></div>
+                                <span className="text-xs text-gray-300">
+                                    "{search}" <span className="text-gray-500">→</span> <span className="text-white font-medium">{group}</span>
+                                </span>
+                            </div>
+                        ))}
+                    </div>
+                ) : (
+                    // DİĞERLERİ İSE: TEK BUTON
+                    <div 
+                        onClick={() => { onCreate(search, selectedColor); setSearch('') }} 
+                        className="flex items-center gap-2 p-2 rounded bg-blue-500/10 hover:bg-blue-500/20 cursor-pointer text-blue-300 hover:text-blue-200 border border-blue-500/30 transition-all"
+                    >
+                        <div className="flex items-center justify-center w-5 h-5 rounded-full bg-blue-500 text-white shadow-sm"><Plus size={14} /></div>
+                        <span className="text-sm font-medium">Oluştur: "{search}"</span>
+                    </div>
+                )}
             </div>
           )}
         </div>
