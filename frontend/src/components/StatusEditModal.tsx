@@ -1,208 +1,191 @@
-import { useState, useEffect } from 'react'
-import { Check, X, Plus, Search } from 'lucide-react'
-
-// Renk stilleri
-const getColorStyle = (color: string) => {
-  const map: Record<string, string> = {
-    gray: 'bg-gray-500/20 text-gray-300',
-    blue: 'bg-blue-500/20 text-blue-300',
-    green: 'bg-green-500/20 text-green-300',
-    red: 'bg-red-500/20 text-red-300',
-    yellow: 'bg-yellow-500/20 text-yellow-300',
-    purple: 'bg-purple-500/20 text-purple-300',
-    pink: 'bg-pink-500/20 text-pink-300',
-    orange: 'bg-orange-500/20 text-orange-300',
-  }
-  return map[color] || map.gray
-}
-
-// Sabit Gruplar
-const STATUS_GROUPS = ['To-do', 'In Progress', 'Complete']
+import { useState, useEffect, useRef } from 'react'
+import { X, Search, Check, Plus, Trash, Palette } from 'lucide-react'
 
 interface Option {
   id: string
   name: string
   color: string
-  group?: string 
+  group?: string
 }
 
 interface StatusEditModalProps {
   isOpen: boolean
   onClose: () => void
-  currentValue: any 
+  title: string
+  currentValue: Option | Option[] | null
   options: Option[]
-  onChange: (value: any) => void 
-  onCreate: (name: string, group: string) => void
+  propType: string
+  multiple?: boolean
+  onChange: (value: string | string[]) => void
+  onCreate: (name: string, color: string, group?: string) => void
   onDelete: (optionId: string) => void
-  multiple?: boolean 
 }
 
-export default function StatusEditModal({ 
-  isOpen, 
-  onClose, 
-  currentValue, 
-  options, 
-  onChange, 
-  onCreate, 
-  onDelete,
-  multiple = false
+export default function StatusEditModal({
+  isOpen,
+  onClose,
+  title,
+  currentValue,
+  options,
+  propType,
+  multiple = false,
+  onChange,
+  onCreate,
+  onDelete
 }: StatusEditModalProps) {
   const [search, setSearch] = useState('')
+  const [selectedColor, setSelectedColor] = useState('#6b7280') // Varsayılan gri
+  const [filteredOptions, setFilteredOptions] = useState<Option[]>(options)
+  const inputRef = useRef<HTMLInputElement>(null)
+  const modalRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    if (isOpen) setSearch('')
-  }, [isOpen])
+    if (isOpen) {
+      setTimeout(() => inputRef.current?.focus(), 50)
+      setFilteredOptions(options)
+      setSearch('')
+      setSelectedColor('#6b7280')
+    }
+  }, [isOpen, options])
+
+  useEffect(() => {
+    if (!search.trim()) {
+      setFilteredOptions(options)
+    } else {
+      setFilteredOptions(options.filter(o => o.name.toLowerCase().includes(search.toLowerCase())))
+    }
+  }, [search, options])
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (modalRef.current && !modalRef.current.contains(event.target as Node)) {
+        onClose()
+      }
+    }
+    if (isOpen) document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [isOpen, onClose])
 
   if (!isOpen) return null
 
-  // Filtreleme
-  const filteredOptions = options.filter(opt => 
-    opt.name.toLowerCase().includes(search.toLowerCase())
-  )
-  
-  // Gruplama
-  const groupedOptions = {
-    'Seçenekler': filteredOptions.filter(opt => !opt.group || !STATUS_GROUPS.includes(opt.group)),
-    'To-do': filteredOptions.filter(opt => opt.group === 'To-do'),
-    'In Progress': filteredOptions.filter(opt => opt.group === 'In Progress'),
-    'Complete': filteredOptions.filter(opt => opt.group === 'Complete')
-  }
-
   const isSelected = (optId: string) => {
-    if (multiple && Array.isArray(currentValue)) {
-      return currentValue.some((opt: Option) => opt.id === optId)
-    }
+    if (Array.isArray(currentValue)) return currentValue.some(c => c.id === optId)
     return currentValue?.id === optId
   }
 
-  const handleOptionClick = (opt: Option) => {
+  const handleSelect = (opt: Option) => {
     if (multiple) {
-      const currentIds = Array.isArray(currentValue) ? currentValue.map((o: Option) => o.id) : []
-      const isAlreadySelected = currentIds.includes(opt.id)
-      let newIds
-      if (isAlreadySelected) {
-        newIds = currentIds.filter((id: string) => id !== opt.id)
-      } else {
-        newIds = [...currentIds, opt.id]
-      }
-      onChange(newIds)
+      const currentIds = Array.isArray(currentValue) ? currentValue.map(c => c.id) : []
+      if (currentIds.includes(opt.id)) onChange(currentIds.filter(id => id !== opt.id))
+      else onChange([...currentIds, opt.id])
     } else {
       onChange(opt.id)
       onClose()
     }
   }
 
+  // Renk Kontrolü (Hex mi yoksa eski tip isim mi?)
+  const getColorStyle = (color: string) => {
+    if (color.startsWith('#')) {
+      return { backgroundColor: color }
+    }
+    // Eski renk isimleri için fallback (Geri uyumluluk)
+    const colorMap: Record<string, string> = {
+      gray: '#6b7280', blue: '#3b82f6', green: '#22c55e', red: '#ef4444',
+      yellow: '#eab308', orange: '#f97316', purple: '#a855f7', pink: '#ec4899', brown: '#78350f'
+    }
+    return { backgroundColor: colorMap[color] || '#6b7280' }
+  }
+
+  const renderOptionItem = (opt: Option) => (
+    <div key={opt.id} className="group flex items-center justify-between p-1.5 rounded hover:bg-[#2C2C2C] cursor-pointer transition-colors">
+      <div onClick={() => handleSelect(opt)} className="flex items-center gap-2 flex-1 overflow-hidden">
+        {/* Yuvarlak Renk Göstergesi */}
+        <div 
+            className="w-3 h-3 rounded-full border border-white/10 shrink-0" 
+            style={getColorStyle(opt.color)}
+        ></div>
+        <span className={`text-sm truncate ${isSelected(opt.id) ? 'text-blue-400 font-medium' : 'text-gray-300'}`}>{opt.name}</span>
+        {isSelected(opt.id) && <Check size={14} className="text-blue-400 ml-auto" />}
+      </div>
+      <button onClick={(e) => { e.stopPropagation(); onDelete(opt.id); }} className="opacity-0 group-hover:opacity-100 p-1 text-gray-600 hover:text-red-400 transition-all">
+        <Trash size={12} />
+      </button>
+    </div>
+  )
+
   return (
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 backdrop-blur-sm animate-in fade-in duration-200" onClick={onClose}>
-      
-      <div 
-        className="w-[400px] bg-[#202020] border border-[#373737] rounded-xl shadow-2xl overflow-hidden flex flex-col animate-in zoom-in-95 duration-200"
-        onClick={e => e.stopPropagation()}
-      >
-        {/* Başlık */}
-        <div className="p-3 border-b border-[#373737]">
-            <div className="flex items-center justify-between mb-2 px-1">
-                <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider">
-                  {multiple ? 'Etiketleri Seç' : 'Durum Seç'}
-                </span>
-                <button onClick={onClose} className="text-gray-500 hover:text-white"><X size={16}/></button>
-            </div>
-            <div className="flex items-center gap-2 bg-[#151515] px-3 py-2 rounded-lg border border-[#373737] focus-within:border-blue-500 transition-colors">
-              <Search size={16} className="text-gray-500" />
-              <input 
-                type="text" 
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Ara..."
-                className="bg-transparent text-sm text-white outline-none w-full placeholder:text-gray-600"
-                autoFocus
-              />
-            </div>
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 backdrop-blur-sm">
+      <div ref={modalRef} className="w-[320px] bg-[#202020] border border-[#373737] rounded-xl shadow-2xl overflow-hidden flex flex-col max-h-[500px] animate-in fade-in zoom-in-95 duration-200">
+        
+        {/* HEADER */}
+        <div className="p-3 border-b border-[#373737] space-y-3">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">{title || 'Seçenekler'}</span>
+            <button onClick={onClose} className="text-gray-500 hover:text-white"><X size={14} /></button>
+          </div>
+          <div className="relative group">
+            <Search size={14} className="absolute left-2.5 top-2.5 text-gray-500 group-focus-within:text-blue-400" />
+            <input ref={inputRef} type="text" value={search} onChange={(e) => setSearch(e.target.value)} placeholder={`${title} ara...`} className="w-full bg-[#151515] text-white text-sm rounded-md py-1.5 pl-8 pr-3 outline-none border border-[#373737] focus:border-blue-500/50 placeholder:text-gray-600" />
+          </div>
         </div>
 
-        {/* Liste */}
-        <div className="max-h-[300px] overflow-y-auto p-2 space-y-1">
-            {Object.entries(groupedOptions).map(([groupName, groupOpts]) => {
-              if (groupOpts.length === 0 && !search) return null
-              if (groupName === 'Seçenekler' && groupOpts.length === 0) return null
-
-              return (
-                <div key={groupName}>
-                  {(groupName !== 'Seçenekler' || Object.keys(groupedOptions).length > 1) && (
-                     <div className="px-3 py-1.5 text-[10px] font-bold text-gray-500 uppercase tracking-wider mt-2">
-                       {groupName}
-                     </div>
-                  )}
-
-                  {groupOpts.map(opt => (
-                    <div 
-                      key={opt.id}
-                      className="group flex items-center justify-between px-3 py-2 rounded-md hover:bg-[#2C2C2C] cursor-pointer transition-colors"
-                      onClick={() => handleOptionClick(opt)}
-                    >
-                      <div className="flex items-center gap-3">
-                         <div className="w-4 flex justify-center">
-                           {isSelected(opt.id) && <Check size={16} className="text-blue-400" />}
+        {/* BODY */}
+        <div className="flex-1 overflow-y-auto p-2 space-y-0.5 custom-scrollbar">
+          {propType === 'status' ? (
+             ['To-do', 'In Progress', 'Complete'].map(group => {
+                 const groupOptions = filteredOptions.filter(o => o.group === group)
+                 if (search && groupOptions.length === 0) return null
+                 return (
+                     <div key={group} className="mb-2">
+                         <div className="text-[10px] font-bold text-gray-500 uppercase px-2 py-1">{group === 'To-do' ? 'Yapılacaklar' : group === 'In Progress' ? 'Devam Edenler' : 'Tamamlananlar'}</div>
+                         <div className="pl-1">
+                             {groupOptions.map(renderOptionItem)}
+                             {!search && groupOptions.length === 0 && <div className="text-[10px] text-gray-600 px-2 italic">Boş</div>}
                          </div>
-                         <span className={`px-2.5 py-0.5 rounded text-sm font-medium ${getColorStyle(opt.color)}`}>
-                           {opt.name}
-                         </span>
-                      </div>
-                      <button 
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          onDelete(opt.id)
-                        }}
-                        className="opacity-0 group-hover:opacity-100 text-gray-500 hover:text-red-400 p-1 rounded hover:bg-red-400/10 transition-all"
-                      >
-                        <X size={14} />
-                      </button>
+                     </div>
+                 )
+             })
+          ) : (
+             filteredOptions.map(renderOptionItem)
+          )}
+
+          {!search && filteredOptions.length === 0 && propType !== 'status' && (
+              <div className="text-xs text-gray-500 text-center py-4 italic">Henüz seçenek yok.</div>
+          )}
+
+          {/* OLUŞTURMA BÖLÜMÜ (RENK SEÇİCİLİ) */}
+          {search && !filteredOptions.some(o => o.name.toLowerCase() === search.toLowerCase()) && (
+            <div className="mt-2 border-t border-[#373737]/50 pt-3 px-2">
+                <div className="flex items-center justify-between mb-3">
+                    <span className="text-[10px] text-gray-500 uppercase font-bold">Renk Seç</span>
+                    <div className="flex items-center gap-2">
+                        {/* Renk Önizlemesi */}
+                        <div className="w-4 h-4 rounded-full border border-white/20" style={{ backgroundColor: selectedColor }}></div>
+                        
+                        {/* Native Color Picker */}
+                        <label className="cursor-pointer bg-[#2C2C2C] hover:bg-[#373737] text-white text-xs px-2 py-1 rounded border border-[#373737] flex items-center gap-1 transition-colors">
+                            <Palette size={12} />
+                            <span>Özel</span>
+                            <input 
+                                type="color" 
+                                value={selectedColor}
+                                onChange={(e) => setSelectedColor(e.target.value)}
+                                className="w-0 h-0 opacity-0 absolute" // Gizli input, label tetikler
+                            />
+                        </label>
                     </div>
-                  ))}
                 </div>
-              )
-            })}
-            
-            {/* --- BURASI DEĞİŞTİ: GRUP SEÇMELİ OLUŞTURMA --- */}
-            {search && !options.find(o => o.name.toLowerCase() === search.toLowerCase()) && (
-              <div className="mt-2 border-t border-[#373737] pt-2">
-                <div className="px-3 text-[10px] text-gray-500 uppercase font-bold mb-1">Yeni Oluştur</div>
-                
-                {/* Her grup için ayrı buton */}
-                {STATUS_GROUPS.map(group => (
-                  <button 
-                    key={group}
-                    onClick={() => {
-                        onCreate(search, group)
-                        setSearch('')
-                        if(!multiple) onClose() 
-                    }}
-                    className="w-full flex items-center gap-3 px-3 py-2 rounded-md hover:bg-[#2C2C2C] text-gray-400 hover:text-white transition-colors text-left"
-                  >
-                    <div className="w-4 flex justify-center"><Plus size={16} /></div>
-                    <span className="text-sm">
-                      <span className="text-white font-medium">"{search}"</span> 
-                      <span className="opacity-50 text-xs ml-1">→ {group}</span>
-                    </span>
-                  </button>
-                ))}
-                
-                {/* Eğer Status değil de normal Select/Multi-select ise 'Seçenekler' grubu için */}
-                {!STATUS_GROUPS.some(g => options.some(o => o.group === g)) && (
-                   <button 
-                    onClick={() => {
-                        onCreate(search, 'Seçenekler')
-                        setSearch('')
-                        if(!multiple) onClose() 
-                    }}
-                    className="w-full flex items-center gap-3 px-3 py-2 rounded-md hover:bg-[#2C2C2C] text-gray-400 hover:text-white transition-colors text-left"
-                  >
-                    <div className="w-4 flex justify-center"><Plus size={16} /></div>
-                    <span className="text-sm">Oluştur: <span className="text-white font-medium">"{search}"</span></span>
-                  </button>
-                )}
-              </div>
-            )}
+
+                <div 
+                    onClick={() => { onCreate(search, selectedColor); setSearch('') }} 
+                    className="flex items-center gap-2 p-2 rounded bg-blue-500/10 hover:bg-blue-500/20 cursor-pointer text-blue-300 hover:text-blue-200 border border-blue-500/30 transition-all"
+                >
+                    <div className="flex items-center justify-center w-5 h-5 rounded-full bg-blue-500 text-white shadow-sm"><Plus size={14} /></div>
+                    <span className="text-sm font-medium">Oluştur: "{search}"</span>
+                </div>
+            </div>
+          )}
         </div>
       </div>
     </div>

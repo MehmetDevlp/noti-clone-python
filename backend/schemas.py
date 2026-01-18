@@ -1,94 +1,99 @@
 from pydantic import BaseModel
-from typing import Optional, List, Any
+from typing import List, Optional, Any, Dict
 from datetime import datetime
 
-# ========== DATABASE SCHEMAS ==========
-
-class DatabaseCreate(BaseModel):
-    title: str
-    icon: Optional[str] = None
-    parent_page_id: Optional[str] = None
-
-class DatabaseResponse(BaseModel):
-    id: str
-    title: str
-    icon: Optional[str]
-    parent_page_id: Optional[str]
-    created_at: int
-    updated_at: int
-    
-    class Config:
-        from_attributes = True
-
-# ========== PROPERTY SCHEMAS ==========
-
-class PropertyCreate(BaseModel):
-    database_id: str
-    name: str
-    type: str
-    config: Optional[dict] = {}
-    order_index: int = 0
-    visible: bool = True
-
-class PropertyUpdate(BaseModel):
-    name: Optional[str] = None
-    type: Optional[str] = None
-    config: Optional[dict] = None
-    order_index: Optional[int] = None
-    visible: Optional[bool] = None
-
-class PropertyResponse(BaseModel):
-    id: str
-    database_id: str
-    name: str
-    type: str
-    config: Optional[str]
-    order_index: int
-    visible: bool
-    created_at: int
-    updated_at: int
-    
-    class Config:
-        from_attributes = True
-
-# ========== PAGE SCHEMAS ==========
-
-class PageCreate(BaseModel):
-    parent_id: str
-    title: str = "Untitled"
-    icon: Optional[str] = None
-    # content burada yok çünkü yeni sayfa boş başlar
-
-class PageUpdate(BaseModel):
-    title: Optional[str] = None
-    icon: Optional[str] = None
-    content: Optional[str] = None # BU EKSİKTİ: Editörden gelen yazıyı kaydetmek için şart!
-
-class PageResponse(BaseModel):
-    id: str
-    parent_id: str
-    parent_type: str
-    title: str
-    icon: Optional[str]
-    content: Optional[str] # BU EKSİKTİ: Editöre veriyi göndermek için şart!
-    created_at: int
-    updated_at: int
-    
-    class Config:
-        from_attributes = True
-
-# ========== PAGE PROPERTY (VALUE) SCHEMAS ==========
+# =======================
+# 1. TEMEL DEĞER (VALUE) ŞEMALARI
+# =======================
+class ValueBase(BaseModel):
+    text: Optional[str] = None
+    date: Optional[datetime] = None
+    end_date: Optional[datetime] = None
+    checked: Optional[bool] = None
+    option_id: Optional[str] = None
+    option_ids: Optional[List[str]] = None
 
 class PropertyValueSet(BaseModel):
     page_id: str
     property_id: str
-    value: Any
+    value: Dict[str, Any]
 
-class PropertyValueResponse(BaseModel):
-    id: str
+class PropertyValueResponse(ValueBase):
+    id: int
     page_id: str
     property_id: str
-    value: Optional[str]
+
+    class Config:
+        from_attributes = True
+
+# =======================
+# 2. ÖZELLİK (PROPERTY) ŞEMALARI
+# =======================
+class PropertyBase(BaseModel):
+    name: str
+    type: str
+    config: Optional[Dict[str, Any]] = None
+    order_index: int = 0
+    visible: bool = True
+
+class PropertyCreate(PropertyBase):
+    database_id: str
+
+class PropertyUpdate(BaseModel):
+    name: Optional[str] = None
+    type: Optional[str] = None
+    config: Optional[Dict[str, Any]] = None
+    order_index: Optional[int] = None
+    visible: Optional[bool] = None
+
+class PropertyResponse(PropertyBase):
+    id: str
+    database_id: str
+    
+    class Config:
+        from_attributes = True
+
+# =======================
+# 3. SAYFA (PAGE) ŞEMALARI
+# =======================
+class PageBase(BaseModel):
+    title: str
+    icon: Optional[str] = None
+    cover: Optional[str] = None
+    content: Optional[str] = None
+
+class PageCreate(PageBase):
+    parent_id: str
+
+class PageUpdate(BaseModel):
+    title: Optional[str] = None
+    icon: Optional[str] = None
+    cover: Optional[str] = None
+    content: Optional[str] = None
+
+class PageResponse(PageBase):
+    id: str
+    parent_id: str
+    created_at: int
+    
+    class Config:
+        from_attributes = True
+
+# =======================
+# 4. VERİTABANI (DATABASE) ŞEMALARI
+# =======================
+# DİKKAT: Bu en sonda olmalı çünkü PropertyResponse kullanıyor
+class DatabaseBase(BaseModel):
+    title: str
+    icon: Optional[str] = None
+
+class DatabaseCreate(DatabaseBase):
+    pass
+
+class DatabaseResponse(DatabaseBase):
+    id: str
+    created_at: int
+    properties: List[PropertyResponse] = []
     
     class Config:
         from_attributes = True

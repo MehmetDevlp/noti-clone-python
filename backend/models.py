@@ -1,66 +1,54 @@
-from sqlalchemy import Column, String, Integer, Boolean, Text, ForeignKey
+from sqlalchemy import Boolean, Column, ForeignKey, Integer, String, Text, DateTime, JSON
 from sqlalchemy.orm import relationship
 from database import Base
-import uuid
-import time
-
-def generate_id():
-    return str(uuid.uuid4())
-
-def current_timestamp():
-    return int(time.time())
+import datetime
 
 class Database(Base):
     __tablename__ = "databases"
-    
-    id = Column(String, primary_key=True, default=generate_id)
-    title = Column(String, nullable=False)
+    id = Column(String, primary_key=True, index=True)
+    title = Column(String)
     icon = Column(String, nullable=True)
-    parent_page_id = Column(String, nullable=True)
-    created_at = Column(Integer, default=current_timestamp)
-    updated_at = Column(Integer, default=current_timestamp, onupdate=current_timestamp)
-    
-    properties = relationship("DatabaseProperty", back_populates="database", cascade="all, delete-orphan")
+    created_at = Column(Integer, default=lambda: int(datetime.datetime.now().timestamp()))
+    properties = relationship("Property", back_populates="database", cascade="all, delete-orphan")
     pages = relationship("Page", back_populates="database", cascade="all, delete-orphan")
 
-class DatabaseProperty(Base):
-    __tablename__ = "database_properties"
-    
-    id = Column(String, primary_key=True, default=generate_id)
-    database_id = Column(String, ForeignKey("databases.id", ondelete="CASCADE"), nullable=False)
-    name = Column(String, nullable=False)
-    type = Column(String, nullable=False)
-    config = Column(Text, nullable=True)
-    order_index = Column(Integer, nullable=False)
+class Property(Base):
+    __tablename__ = "properties"
+    id = Column(String, primary_key=True, index=True)
+    database_id = Column(String, ForeignKey("databases.id"))
+    name = Column(String)
+    type = Column(String) # 'text', 'select', 'multi_select', 'status', 'date', 'checkbox'
+    config = Column(JSON, nullable=True)
+    order_index = Column(Integer, default=0)
     visible = Column(Boolean, default=True)
-    created_at = Column(Integer, default=current_timestamp)
-    updated_at = Column(Integer, default=current_timestamp, onupdate=current_timestamp)
-    
     database = relationship("Database", back_populates="properties")
-    values = relationship("PageProperty", back_populates="property", cascade="all, delete-orphan")
+    values = relationship("Value", back_populates="property", cascade="all, delete-orphan")
 
 class Page(Base):
     __tablename__ = "pages"
-    
-    id = Column(String, primary_key=True, default=generate_id)
-    parent_id = Column(String, ForeignKey("databases.id", ondelete="CASCADE"), nullable=False)
-    parent_type = Column(String, default="database")
-    title = Column(String, nullable=False, default="Untitled")
+    id = Column(String, primary_key=True, index=True)
+    parent_id = Column(String, ForeignKey("databases.id"))
+    title = Column(String)
     icon = Column(String, nullable=True)
-    content = Column(Text, nullable=True, default="[]") # BU SÜTUN ŞART
-    created_at = Column(Integer, default=current_timestamp)
-    updated_at = Column(Integer, default=current_timestamp, onupdate=current_timestamp)
-    
+    cover = Column(String, nullable=True)
+    content = Column(Text, nullable=True)
+    created_at = Column(Integer, default=lambda: int(datetime.datetime.now().timestamp()))
     database = relationship("Database", back_populates="pages")
-    properties = relationship("PageProperty", back_populates="page", cascade="all, delete-orphan")
+    values = relationship("Value", back_populates="page", cascade="all, delete-orphan")
 
-class PageProperty(Base):
-    __tablename__ = "page_properties"
+class Value(Base):
+    __tablename__ = "values"
+    id = Column(Integer, primary_key=True, index=True)
+    page_id = Column(String, ForeignKey("pages.id"))
+    property_id = Column(String, ForeignKey("properties.id"))
     
-    id = Column(String, primary_key=True, default=generate_id)
-    page_id = Column(String, ForeignKey("pages.id", ondelete="CASCADE"), nullable=False)
-    property_id = Column(String, ForeignKey("database_properties.id", ondelete="CASCADE"), nullable=False)
-    value = Column(Text, nullable=True)
+    # Değer alanları (Frontend ile aynı isimlerde)
+    text = Column(Text, nullable=True)
+    date = Column(DateTime, nullable=True)
+    end_date = Column(DateTime, nullable=True) # YENİ
+    checked = Column(Boolean, default=False)
+    option_id = Column(String, nullable=True)
+    option_ids = Column(JSON, nullable=True)
     
-    page = relationship("Page", back_populates="properties")
-    property = relationship("DatabaseProperty", back_populates="values")
+    page = relationship("Page", back_populates="values")
+    property = relationship("Property", back_populates="values")

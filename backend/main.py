@@ -11,10 +11,9 @@ models.Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="Notion Clone API", version="1.0.0")
 
-# CORS - Frontend'den erişim için
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Production'da sadece frontend domain'i
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -123,15 +122,9 @@ def get_value(page_id: str, property_id: str, db: Session = Depends(get_db)):
 def list_page_values(page_id: str, db: Session = Depends(get_db)):
     return crud.get_page_values(db, page_id)
 
-# ========== HEALTH CHECK ==========
-
 @app.get("/")
 def root():
-    return {
-        "message": "Notion Clone API",
-        "version": "1.0.0",
-        "status": "running"
-    }
+    return {"message": "Notion Clone API", "version": "1.0.0", "status": "running"}
 
 @app.get("/health")
 def health():

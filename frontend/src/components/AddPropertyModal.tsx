@@ -1,80 +1,51 @@
 import { useState } from 'react'
-import { X } from 'lucide-react'
+import { X, Type, List, CheckSquare, Calendar, Tag } from 'lucide-react'
+
+const TYPE_ICONS = {
+  text: <Type size={16} />,
+  select: <List size={16} />,
+  multi_select: <Tag size={16} />,
+  status: <CheckSquare size={16} />,
+  date: <Calendar size={16} />,
+  checkbox: <CheckSquare size={16} />,
+}
+
+const PROPERTY_TYPES = [
+  { type: 'text', name: 'Metin', description: 'Açıklama, notlar vb.' },
+  { type: 'status', name: 'Durum', description: 'İlerleme durumu (To-do, Done)' },
+  { type: 'select', name: 'Öncelik (Seçim)', description: 'Tek bir seçenek (Örn: Yüksek, Orta)' },
+  { type: 'multi_select', name: '#Etiket (Çoklu)', description: 'Birden fazla etiket (Örn: #iş, #acil)' },
+  { type: 'date', name: 'Tarih', description: 'Bitiş tarihi destekli takvim' },
+  { type: 'checkbox', name: 'Onay Kutusu', description: 'Basit evet/hayır' },
+]
 
 interface AddPropertyModalProps {
   databaseId: string
   onClose: () => void
-  onSuccess: (property: any) => void
-}
-
-const PROPERTY_TYPES = [
-  { id: 'text', name: 'Text', icon: '📝', description: 'Düz metin' },
-  { id: 'number', name: 'Number', icon: '🔢', description: 'Sayısal değer' },
-  { id: 'select', name: 'Select', icon: '🏷️', description: 'Tekli seçim listesi' },
-  { id: 'multi_select', name: 'Multi-select', icon: '🏷️', description: 'Çoklu etiketler' },
-  { id: 'date', name: 'Date', icon: '📅', description: 'Tarih veya aralık' },
-  { id: 'checkbox', name: 'Checkbox', icon: '☑️', description: 'Doğru veya yanlış' },
-  { id: 'status', name: 'Status', icon: '📊', description: 'Gruplandırılmış durumlar' },
-]
-
-const SELECT_COLORS = ['gray', 'blue', 'green', 'red', 'yellow', 'purple', 'pink', 'orange', 'brown']
-
-// Options tipini güncelledik: "group" alanı eklendi (Status için şart)
-interface Option {
-  id: string
-  name: string
-  color: string
-  group?: string 
+  onSuccess: (newProperty: any) => void
 }
 
 export default function AddPropertyModal({ databaseId, onClose, onSuccess }: AddPropertyModalProps) {
-  const [step, setStep] = useState<'type' | 'config'>('type')
-  const [selectedType, setSelectedType] = useState('')
-  const [propertyName, setPropertyName] = useState('')
-  const [options, setOptions] = useState<Option[]>([])
+  const [name, setName] = useState('')
+  const [selectedType, setSelectedType] = useState('status') // Varsayılan Status olsun
+  const [isLoading, setIsLoading] = useState(false)
 
-  const handleTypeSelect = (type: string) => {
-    setSelectedType(type)
-    
-    // Select ve multi_select için varsayılanlar
-    if (type === 'select' || type === 'multi_select') {
-      setOptions([
-        { id: crypto.randomUUID(), name: 'Seçenek 1', color: 'gray' },
-        { id: crypto.randomUUID(), name: 'Seçenek 2', color: 'blue' },
-      ])
-      setStep('config')
-    } 
-    // --- BURASI DEĞİŞTİ: Status için Gruplu Varsayılanlar ---
-    else if (type === 'status') {
-      setOptions([
-        // Grup: To-do
-        { id: crypto.randomUUID(), name: 'Not Started', color: 'gray', group: 'To-do' },
-        
-        // Grup: In Progress
-        { id: crypto.randomUUID(), name: 'In Progress', color: 'blue', group: 'In Progress' },
-        
-        // Grup: Complete
-        { id: crypto.randomUUID(), name: 'Done', color: 'green', group: 'Complete' }
-      ])
-      setStep('config')
-    }
-    // Diğerleri (Text, number vb.)
-    else {
-      setStep('config')
-    }
-  }
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!name.trim()) { alert("Lütfen bir isim giriniz."); return; }
 
-  const handleCreate = async () => {
-    if (!propertyName.trim()) {
-      alert('Lütfen özellik ismini giriniz!')
-      return
-    }
+    setIsLoading(true)
 
-    const config: any = {}
-    
-    // Status veya Select ise options'ı config içine gömüyoruz
-    if (selectedType === 'select' || selectedType === 'multi_select' || selectedType === 'status') {
-      config.options = options
+    // ÖZEL AYARLAR: Eğer Status seçildiyse varsayılan seçenekleri oluştur
+    let initialConfig = {}
+    if (selectedType === 'status') {
+        initialConfig = {
+            options: [
+                { id: crypto.randomUUID(), name: 'Başlanmadı', color: 'gray', group: 'To-do' },
+                { id: crypto.randomUUID(), name: 'Devam Ediyor', color: 'blue', group: 'In Progress' },
+                { id: crypto.randomUUID(), name: 'Tamamlandı', color: 'green', group: 'Complete' }
+            ]
+        }
     }
 
     try {
@@ -83,168 +54,70 @@ export default function AddPropertyModal({ databaseId, onClose, onSuccess }: Add
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           database_id: databaseId,
-          name: propertyName,
+          name: name,
           type: selectedType,
-          config: config,
-          order_index: 999,
-          visible: true,
+          config: initialConfig // Dolu config gönderiyoruz
         })
       })
 
-      if (response.ok) {
-        const newProperty = await response.json()
-        onSuccess(newProperty)
-        onClose()
-      }
-    } catch (err) {
-      console.error('Özellik oluşturulamadı:', err)
+      if (!response.ok) throw new Error('Sunucu hatası')
+      
+      const data = await response.json()
+      onSuccess(data)
+      onClose()
+    } catch (err: any) {
+      alert("Hata: " + err.message)
+    } finally {
+      setIsLoading(false)
     }
   }
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-[#202020] border border-[#373737] rounded-lg w-[600px] max-h-[80vh] overflow-y-auto shadow-2xl">
-        {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-[#373737]">
-          <h2 className="text-lg font-semibold text-white">
-            {step === 'type' ? 'Özellik Türü Seç' : 'Özelliği Yapılandır'}
-          </h2>
-          <button
-            onClick={onClose}
-            className="text-gray-400 hover:text-white transition-colors"
-          >
-            <X size={20} />
-          </button>
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={onClose}>
+      <div className="w-[400px] bg-[#202020] border border-[#373737] rounded-xl shadow-2xl overflow-hidden flex flex-col" onClick={e => e.stopPropagation()}>
+        <div className="p-4 border-b border-[#373737] flex items-center justify-between">
+          <span className="text-sm font-semibold text-gray-300">Yeni Özellik Ekle</span>
+          <button onClick={onClose} className="text-gray-500 hover:text-white"><X size={16} /></button>
         </div>
+        
+        <form onSubmit={handleSubmit} className="p-4 flex flex-col gap-4">
+          <div>
+            <label className="text-xs font-bold text-gray-500 uppercase mb-1 block">Özellik İsmi</label>
+            <input 
+              autoFocus
+              type="text" 
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              className="w-full bg-[#151515] border border-[#373737] rounded p-2 text-white text-sm outline-none focus:border-blue-500 transition-colors"
+              placeholder="Örn: Durum, Öncelik..."
+            />
+          </div>
 
-        {/* Body */}
-        <div className="p-4">
-          {step === 'type' ? (
-            // Type Selection Grid
-            <div className="grid grid-cols-2 gap-3">
-              {PROPERTY_TYPES.map(type => (
-                <button
-                  key={type.id}
-                  onClick={() => handleTypeSelect(type.id)}
-                  className="p-4 bg-[#2C2C2C] border border-[#373737] rounded-lg hover:bg-[#373737] transition-colors text-left group"
+          <div>
+            <label className="text-xs font-bold text-gray-500 uppercase mb-2 block">Tür</label>
+            <div className="grid grid-cols-1 gap-1 max-h-[250px] overflow-y-auto pr-1 custom-scrollbar">
+              {PROPERTY_TYPES.map((pt) => (
+                <div 
+                  key={pt.type}
+                  onClick={() => setSelectedType(pt.type)}
+                  className={`flex items-center gap-3 p-2 rounded cursor-pointer transition-colors ${selectedType === pt.type ? 'bg-blue-500/20 border border-blue-500/50' : 'hover:bg-[#2C2C2C] border border-transparent'}`}
                 >
-                  <div className="flex items-center gap-3 mb-2">
-                    <span className="text-2xl">{type.icon}</span>
-                    <span className="font-medium text-white group-hover:text-blue-400 transition-colors">{type.name}</span>
+                  <div className={`p-1.5 rounded ${selectedType === pt.type ? 'text-blue-400' : 'text-gray-400'}`}>
+                    {TYPE_ICONS[pt.type as keyof typeof TYPE_ICONS]}
                   </div>
-                  <p className="text-sm text-gray-400">{type.description}</p>
-                </button>
-              ))}
-            </div>
-          ) : (
-            // Config Step
-            <div className="space-y-6">
-              {/* Property Name */}
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
-                  Özellik İsmi
-                </label>
-                <input
-                  type="text"
-                  value={propertyName}
-                  onChange={(e) => setPropertyName(e.target.value)}
-                  placeholder="Örn: Durum, Öncelik, Bitiş Tarihi"
-                  className="w-full px-3 py-2 bg-[#2C2C2C] border border-[#373737] rounded text-white outline-none focus:border-blue-500 transition-colors"
-                  autoFocus
-                />
-              </div>
-
-              {/* Options Editor (Select/Multi-select/Status) */}
-              {(selectedType === 'select' || selectedType === 'multi_select' || selectedType === 'status') && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">
-                    Seçenekler
-                  </label>
-                  
-                  {/* Status ise Bilgi Notu */}
-                  {selectedType === 'status' && (
-                    <div className="mb-3 text-xs text-blue-400 bg-blue-400/10 p-2 rounded border border-blue-400/20">
-                      ℹ️ Status seçenekleri otomatik olarak "Yapılacaklar", "Devam Ediyor" ve "Tamamlandı" gruplarına aittir.
-                    </div>
-                  )}
-
-                  <div className="space-y-2 max-h-[300px] overflow-y-auto pr-2">
-                    {options.map((opt, idx) => (
-                      <div key={idx} className="flex items-center gap-2">
-                        {/* Option Name */}
-                        <input
-                          type="text"
-                          value={opt.name}
-                          onChange={(e) => {
-                            const newOpts = [...options]
-                            newOpts[idx].name = e.target.value
-                            setOptions(newOpts)
-                          }}
-                          className="flex-1 px-3 py-2 bg-[#2C2C2C] border border-[#373737] rounded text-white outline-none focus:border-blue-500"
-                        />
-                        
-                        {/* Color Picker */}
-                        <select
-                          value={opt.color}
-                          onChange={(e) => {
-                            const newOpts = [...options]
-                            newOpts[idx].color = e.target.value
-                            setOptions(newOpts)
-                          }}
-                          className="px-2 py-2 bg-[#2C2C2C] border border-[#373737] rounded text-white outline-none cursor-pointer"
-                          style={{ color: opt.color === 'gray' ? 'white' : opt.color }}
-                        >
-                          {SELECT_COLORS.map(color => (
-                            <option key={color} value={color} className={`text-${color}-400`}>
-                              {color.charAt(0).toUpperCase() + color.slice(1)}
-                            </option>
-                          ))}
-                        </select>
-                        
-                        {/* Delete Button */}
-                        <button
-                          onClick={() => setOptions(options.filter((_, i) => i !== idx))}
-                          className="p-2 text-gray-500 hover:text-red-400 hover:bg-red-400/10 rounded transition-colors"
-                          title="Sil"
-                        >
-                          ✕
-                        </button>
-                      </div>
-                    ))}
-                    
-                    <button
-                      onClick={() => setOptions([...options, { 
-                        id: crypto.randomUUID(), 
-                        name: `Yeni Seçenek ${options.length + 1}`, 
-                        color: 'gray',
-                        group: selectedType === 'status' ? 'Yapılacaklar' : undefined // Yeni eklenirse varsayılan grup
-                      }])}
-                      className="text-sm text-blue-400 hover:text-blue-300 flex items-center gap-1 mt-2"
-                    >
-                      <span>+</span> Seçenek Ekle
-                    </button>
+                  <div>
+                    <div className={`text-sm font-medium ${selectedType === pt.type ? 'text-blue-100' : 'text-gray-300'}`}>{pt.name}</div>
+                    <div className="text-[10px] text-gray-500">{pt.description}</div>
                   </div>
                 </div>
-              )}
-
-              {/* Actions */}
-              <div className="flex gap-3 pt-4 border-t border-[#373737]">
-                <button
-                  onClick={() => setStep('type')}
-                  className="px-4 py-2 bg-[#2C2C2C] border border-[#373737] rounded hover:bg-[#373737] transition-colors text-white"
-                >
-                  Geri
-                </button>
-                <button
-                  onClick={handleCreate}
-                  className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded transition-colors text-white font-medium shadow-lg shadow-blue-900/20"
-                >
-                  Oluştur
-                </button>
-              </div>
+              ))}
             </div>
-          )}
-        </div>
+          </div>
+
+          <button type="submit" disabled={isLoading} className="mt-2 bg-blue-600 hover:bg-blue-500 text-white py-2 rounded text-sm font-medium transition-colors">
+            {isLoading ? 'Oluşturuluyor...' : 'Oluştur'}
+          </button>
+        </form>
       </div>
     </div>
   )

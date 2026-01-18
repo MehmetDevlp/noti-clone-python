@@ -23,14 +23,18 @@ import {
   KanbanSquare as LayoutKanban, 
   Plus,
   X,
-  GripVertical
+  GripVertical,
+  Calendar,
+  ToggleRight,
+  ToggleLeft
 } from 'lucide-react'
 
 // --- TİP TANIMLARI ---
 interface Database { id: string; title: string; icon: string | null }
-interface Property { id: string; name: string; type: string; config: string | null; order_index: number; visible: boolean }
+interface Property { id: string; name: string; type: string; config: any; order_index: number; visible: boolean }
 interface Page { id: string; title: string; icon: string | null; created_at: number }
 
+// Eski renkler için harita (Fallback)
 const COLOR_MAP: Record<string, string> = {
   gray: 'bg-gray-500/20 text-gray-300',
   blue: 'bg-blue-500/20 text-blue-300',
@@ -41,6 +45,77 @@ const COLOR_MAP: Record<string, string> = {
   pink: 'bg-pink-500/20 text-pink-300',
   orange: 'bg-orange-500/20 text-orange-300',
   brown: 'bg-amber-700/20 text-amber-400',
+}
+
+// --- ÖZEL TARİH SEÇİCİ BİLEŞENİ ---
+const DatePickerCell = ({ date, endDate, position, onUpdate, onClose }: { 
+    date: string | null, 
+    endDate: string | null, 
+    position: { x: number, y: number },
+    onUpdate: (d: string | null, ed: string | null) => void, 
+    onClose: () => void 
+}) => {
+    const parseDate = (d: string | null) => d ? (d.includes('T') ? d.split('T')[0] : d) : ''
+
+    const [localDate, setLocalDate] = useState(parseDate(date))
+    const [localEndDate, setLocalEndDate] = useState(parseDate(endDate))
+    const [hasEndDate, setHasEndDate] = useState(!!endDate)
+    
+    const style: React.CSSProperties = {
+        position: 'fixed',
+        top: `${position.y + 40}px`,
+        left: `${position.x}px`,
+        zIndex: 9999, 
+    }
+
+    const handleSave = () => {
+        if (hasEndDate && localEndDate && localDate && localEndDate < localDate) {
+            alert("Bitiş tarihi başlangıç tarihinden önce olamaz!");
+            return;
+        }
+        const finalDate = localDate ? localDate : null
+        const finalEndDate = (hasEndDate && localEndDate) ? localEndDate : null
+        onUpdate(finalDate, finalEndDate)
+        onClose()
+    }
+
+    return (
+        <>
+            <div className="fixed inset-0 z-[9990]" onClick={onClose}></div>
+            <div style={style} className="bg-[#202020] border border-[#373737] rounded-lg shadow-2xl p-4 w-64 flex flex-col gap-4 animate-in fade-in zoom-in-95 duration-200">
+                <div>
+                    <label className="text-xs font-bold text-gray-500 uppercase mb-1 block">Başlangıç Tarihi</label>
+                    <input 
+                        type="date" 
+                        value={localDate}
+                        onChange={(e) => setLocalDate(e.target.value)}
+                        className="w-full bg-[#151515] border border-[#373737] rounded px-3 py-2 text-white text-sm outline-none focus:border-blue-500 transition-colors"
+                    />
+                </div>
+                <div className="flex items-center justify-between border-t border-[#373737] pt-3">
+                    <span className="text-xs text-gray-400 font-medium">Bitiş Tarihi Ekle</span>
+                    <button onClick={() => setHasEndDate(!hasEndDate)} className={`transition-colors ${hasEndDate ? 'text-blue-500' : 'text-gray-600'}`}>
+                        {hasEndDate ? <ToggleRight size={24} /> : <ToggleLeft size={24} />}
+                    </button>
+                </div>
+                {hasEndDate && (
+                    <div className="animate-in slide-in-from-top-2 fade-in duration-200">
+                        <label className="text-xs font-bold text-gray-500 uppercase mb-1 block">Bitiş Tarihi</label>
+                        <input 
+                            type="date" 
+                            value={localEndDate}
+                            onChange={(e) => setLocalEndDate(e.target.value)}
+                            className="w-full bg-[#151515] border border-[#373737] rounded px-3 py-2 text-white text-sm outline-none focus:border-blue-500 transition-colors"
+                        />
+                    </div>
+                )}
+                <div className="flex justify-between items-center mt-2">
+                    <button onClick={() => { onUpdate(null, null); onClose() }} className="text-xs text-red-400 hover:text-red-300 hover:bg-red-400/10 px-2 py-1 rounded transition-colors">Temizle</button>
+                    <button onClick={handleSave} className="text-xs bg-blue-600 hover:bg-blue-500 text-white px-4 py-1.5 rounded font-medium transition-colors">Kaydet</button>
+                </div>
+            </div>
+        </>
+    )
 }
 
 // --- HEADER MENÜSÜ ---
@@ -68,7 +143,7 @@ const PropertyHeader = ({ property, onRename, onDelete, icon }: { property: Prop
         </div>
       )}
       {isOpen && !isRenaming && (
-        <div className="fixed mt-8 ml-4 w-40 bg-[#202020] border border-[#373737] rounded-lg shadow-xl z-[9999] py-1 flex flex-col">
+        <div className="fixed mt-8 ml-4 w-40 bg-[#202020] border border-[#373737] rounded-lg shadow-xl z-[9999] py-1 flex flex-col animate-in zoom-in-95 duration-100">
           <button onClick={() => setIsRenaming(true)} className="flex items-center gap-2 px-3 py-1.5 text-sm text-gray-300 hover:bg-[#2C2C2C] text-left"><Edit2 size={14}/> İsim Değiştir</button>
           <button onClick={() => { if(confirm('Silmek istediğine emin misin?')) onDelete(property.id); setIsOpen(false) }} className="flex items-center gap-2 px-3 py-1.5 text-sm text-red-400 hover:bg-red-400/10 text-left"><Trash size={14}/> Sil</button>
         </div>
@@ -91,13 +166,13 @@ export default function DatabasePage() {
   const [editingCell, setEditingCell] = useState<{ pageId: string; field: 'title' | 'property'; propertyId?: string } | null>(null)
   const [editValue, setEditValue] = useState('')
   const [showAddPropertyModal, setShowAddPropertyModal] = useState(false)
-  const [activeStatusModal, setActiveStatusModal] = useState<{ isOpen: boolean, pageId: string, propertyId: string, currentValue: any, options: any[], propType: string } | null>(null)
-  
+  const [activeStatusModal, setActiveStatusModal] = useState<{ isOpen: boolean, pageId: string, propertyId: string, propertyName: string, currentValue: any, options: any[], propType: string } | null>(null)
+  const [activeDatePicker, setActiveDatePicker] = useState<{ pageId: string, propertyId: string, date: string | null, endDate: string | null, position: { x: number, y: number } } | null>(null)
+
   const [sorting, setSorting] = useState<SortingState>([])
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
   const [rowSelection, setRowSelection] = useState<RowSelectionState>({})
 
-  // --- HANDLERS ---
   const handleAddPage = async () => { 
       if (!id) return
       try { const res = await fetch('http://localhost:8000/pages', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ parent_id: id, title: '' }) }); if(res.ok) { const p = await res.json(); setPages([...pages, p]) } } catch(e){console.error(e)}
@@ -116,17 +191,19 @@ export default function DatabasePage() {
       try { const res = await fetch(`http://localhost:8000/pages/${pageId}`, { method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify({title:newTitle}) }); if(res.ok) { setPages(pages.map(p=>p.id===pageId?{...p, title:newTitle}:p)); setEditingCell(null) } } catch(e){console.error(e)}
   }
   
-  // DÜZELTME BURADA: try-finally bloğu ve setEditingCell(null)
   const handlePropertyValueUpdate = async (pageId: string, propertyId: string, value: any) => {
       try { 
         const res = await fetch('http://localhost:8000/values', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({page_id:pageId, property_id:propertyId, value}) }); 
         if(res.ok) { 
-          setPageValues(prev=>({...prev, [pageId]:{...prev[pageId], [propertyId]:value}}))
+          setPageValues(prev => {
+              const currentVal = prev[pageId]?.[propertyId] || {};
+              return {...prev, [pageId]:{...prev[pageId], [propertyId]: {...currentVal, ...value}}}
+          })
         } 
       } catch(e){
         console.error("Update error:", e)
       } finally {
-        setEditingCell(null) // <--- BU SATIR HAYAT KURTARIR
+        setEditingCell(null)
       }
   }
 
@@ -135,7 +212,7 @@ export default function DatabasePage() {
       try { 
         const res = await fetch(`http://localhost:8000/properties/${propertyId}`, {method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify({config})}); 
         if(res.ok) { 
-          setProperties(prev=>prev.map(p=>p.id===propertyId?{...p, config:JSON.stringify(config)}:p)); 
+          setProperties(prev=>prev.map(p=>p.id===propertyId?{...p, config: config}:p)); 
           if(activeStatusModal?.propertyId===propertyId) setActiveStatusModal(prev=>prev?{...prev, options:newOptions}:null) 
         } 
       } catch(e){console.error(e)}
@@ -147,7 +224,22 @@ export default function DatabasePage() {
       try { const res = await fetch(`http://localhost:8000/properties/${propId}`, {method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify({name})}); if(res.ok) setProperties(properties.map(p=>p.id===propId?{...p, name}:p)) } catch(e){console.error(e)}
   }
 
-  // --- SÜTUNLAR ---
+  // --- RENK STİLİ YARDIMCISI ---
+  const getBadgeStyle = (color: string) => {
+      if (color.startsWith('#')) {
+          // HEX RENK
+          return {
+              style: { backgroundColor: `${color}33`, color: color }, // %20 Opaklık ile arka plan
+              className: "px-2 py-0.5 rounded text-xs"
+          }
+      }
+      // ESKİ RENK (FALLBACK)
+      return {
+          style: {},
+          className: `px-2 py-0.5 rounded text-xs ${COLOR_MAP[color] || COLOR_MAP.gray}`
+      }
+  }
+
   const columns = useMemo<ColumnDef<Page>[]>(() => {
     const cols: ColumnDef<Page>[] = [
       {
@@ -202,7 +294,6 @@ export default function DatabasePage() {
 
     properties.forEach(prop => {
       let icon = <span className="text-[10px] font-mono text-gray-500">Tx</span>
-      if(prop.type === 'number') icon = <span className="text-[10px] font-mono text-gray-500">#</span>
       if(prop.type === 'select' || prop.type === 'status') icon = <span className="text-[10px] text-gray-500">▼</span>
       if(prop.type === 'multi_select') icon = <span className="text-[10px] text-gray-500">☰</span>
       if(prop.type === 'date') icon = <span className="text-[10px] text-gray-500">📅</span>
@@ -214,16 +305,16 @@ export default function DatabasePage() {
             const val = pageValues[row.id]?.[prop.id]
             if (!val) return ''
             if (prop.type === 'select' || prop.type === 'status') {
-                const config = prop.config ? JSON.parse(prop.config) : null
+                const config = prop.config || { options: [] }
                 return config?.options?.find((o: any) => o.id === val.option_id)?.name || ''
             }
             if (prop.type === 'multi_select') {
-                const config = prop.config ? JSON.parse(prop.config) : null
+                const config = prop.config || { options: [] }
                 const ids = val.option_ids || []
                 return ids.map((id: string) => config?.options?.find((o: any) => o.id === id)?.name).join(', ')
             }
             if (prop.type === 'text') return val.text || ''
-            if (prop.type === 'number') return val.number?.toString() || ''
+            if (prop.type === 'date') return val.date || ''
             return ''
         },
         header: () => <PropertyHeader property={prop} onDelete={handleDeleteProperty} onRename={handleRenameProperty} icon={icon} />,
@@ -232,7 +323,7 @@ export default function DatabasePage() {
           const isEditing = editingCell?.pageId === row.original.id && editingCell?.field === 'property' && editingCell?.propertyId === prop.id
 
           if (prop.type === 'select' || prop.type === 'status' || prop.type === 'multi_select') {
-            const config = prop.config ? JSON.parse(prop.config) : { options: [] }
+            const config = prop.config || { options: [] }
             const options = config.options || []
             let selectedValue: any = null
             if (prop.type === 'multi_select') {
@@ -243,14 +334,31 @@ export default function DatabasePage() {
             }
             return (
               <div 
-                onClick={() => setActiveStatusModal({ isOpen: true, pageId: row.original.id, propertyId: prop.id, currentValue: selectedValue, options, propType: prop.type })}
+                onClick={() => setActiveStatusModal({ 
+                    isOpen: true, 
+                    pageId: row.original.id, 
+                    propertyId: prop.id, 
+                    propertyName: prop.name,
+                    currentValue: selectedValue, 
+                    options, 
+                    propType: prop.type 
+                })}
                 className="cursor-pointer h-full w-full flex items-center flex-wrap gap-1 min-h-[34px] px-1"
               >
                 {prop.type === 'multi_select' && Array.isArray(selectedValue) && selectedValue.length > 0 ? (
-                    selectedValue.map((opt: any) => <span key={opt.id} className={`px-2 py-0.5 rounded text-xs ${COLOR_MAP[opt.color] || COLOR_MAP.gray}`}>{opt.name}</span>)
+                    selectedValue.map((opt: any) => {
+                        const { style, className } = getBadgeStyle(opt.color)
+                        return <span key={opt.id} style={style} className={className}>{opt.name}</span>
+                    })
                 ) : (prop.type !== 'multi_select' && selectedValue) ? (
-                   <span className={`px-2 py-0.5 rounded text-xs ${COLOR_MAP[selectedValue.color] || COLOR_MAP.gray} flex items-center gap-1.5`}>{prop.type==='status'&&<span className="w-1.5 h-1.5 rounded-full bg-current opacity-60"></span>}{selectedValue.name}</span>
-                ) : null}
+                   (() => {
+                       const { style, className } = getBadgeStyle(selectedValue.color)
+                       return <span style={style} className={`${className} flex items-center gap-1.5`}>
+                           {prop.type==='status'&&<span className="w-1.5 h-1.5 rounded-full bg-current opacity-60"></span>}
+                           {selectedValue.name}
+                       </span>
+                   })()
+                ) : <span className="opacity-0 group-hover:opacity-50 text-gray-500 italic text-xs px-1">Seç</span>}
               </div>
             )
           }
@@ -264,25 +372,96 @@ export default function DatabasePage() {
                />
              ) : (
                <div onClick={()=>{setEditingCell({pageId:row.original.id,field:'property',propertyId:prop.id});setEditValue(value?.text||'')}} className="cursor-text h-full w-full flex items-center min-h-[34px] text-sm text-white px-1">
-                 {value?.text}
+                 {value?.text || <span className="opacity-0 group-hover:opacity-50 text-gray-500 italic text-xs">Boş</span>}
                </div>
              )
           }
-          if (prop.type==='number') return isEditing ? <input type="number" value={editValue} onChange={(e)=>setEditValue(e.target.value)} onBlur={()=>handlePropertyValueUpdate(row.original.id,prop.id,{number:parseFloat(editValue)||0})} className="w-full bg-transparent text-white text-sm outline-none px-1 border-b border-blue-500"/> : <div onClick={()=>{setEditingCell({pageId:row.original.id,field:'property',propertyId:prop.id});setEditValue(value?.number?.toString()||'')}} className="cursor-text h-full w-full flex items-center min-h-[34px] text-sm text-white px-1">{value?.number}</div>
-          if (prop.type==='checkbox') return <div className="flex items-center h-full w-full px-1"><input type="checkbox" checked={value?.checked||false} onChange={()=>handlePropertyValueUpdate(row.original.id,prop.id,{checked:!value?.checked})} className="w-4 h-4 rounded bg-transparent border-gray-500 accent-blue-500 cursor-pointer"/></div>
-          if (prop.type==='date') return <div className="text-sm text-gray-500 italic px-1">Tarih (WIP)</div>
+          if (prop.type === 'checkbox') return <div className="flex items-center h-full w-full px-1"><input type="checkbox" checked={value?.checked||false} onChange={()=>handlePropertyValueUpdate(row.original.id,prop.id,{checked:!value?.checked})} className="w-4 h-4 rounded bg-transparent border-gray-500 accent-blue-500 cursor-pointer"/></div>
+          
+          if (prop.type === 'date') {
+              const formatDisplay = (d: string) => {
+                  try {
+                      return new Date(d).toLocaleDateString('tr-TR', { day: 'numeric', month: 'short', year: 'numeric' })
+                  } catch { return d }
+              }
+
+              const startDate = value?.date ? formatDisplay(value.date) : null
+              const endDate = value?.end_date ? formatDisplay(value.end_date) : null
+              
+              return (
+                  <div className="relative h-full w-full">
+                      <div 
+                        onClick={(e) => {
+                            e.stopPropagation()
+                            const rect = e.currentTarget.getBoundingClientRect()
+                            setActiveDatePicker({ 
+                                pageId: row.original.id, 
+                                propertyId: prop.id, 
+                                date: value?.date, 
+                                endDate: value?.end_date,
+                                position: { x: rect.left, y: rect.top }
+                            })
+                        }}
+                        className="cursor-pointer h-full w-full flex items-center min-h-[34px] text-sm text-gray-300 px-1 hover:bg-[#2C2C2C] rounded transition-colors"
+                      >
+                          {startDate ? (
+                              <span className="flex items-center gap-1.5">
+                                  <span>{startDate}</span>
+                                  {endDate && <span className="text-gray-500 flex items-center gap-1">→ <span>{endDate}</span></span>}
+                              </span>
+                          ) : <span className="text-gray-600 italic text-xs">Tarih Seç</span>}
+                      </div>
+                      
+                      {activeDatePicker && activeDatePicker.pageId === row.original.id && activeDatePicker.propertyId === prop.id && (
+                          <DatePickerCell 
+                              date={activeDatePicker.date} 
+                              endDate={activeDatePicker.endDate} 
+                              position={activeDatePicker.position}
+                              onClose={() => setActiveDatePicker(null)}
+                              onUpdate={(d, ed) => handlePropertyValueUpdate(row.original.id, prop.id, { date: d, end_date: ed })}
+                          />
+                      )}
+                  </div>
+              )
+          }
+
           return null
         },
         size: 200,
       })
     })
     return cols
-  }, [properties, pageValues, editingCell, editValue])
+  }, [properties, pageValues, editingCell, editValue, activeDatePicker])
 
-  // --- INIT TABLE ---
   const table = useReactTable({ data: pages, columns, state: { sorting, columnFilters, rowSelection }, enableRowSelection: true, onSortingChange: setSorting, onColumnFiltersChange: setColumnFilters, onRowSelectionChange: setRowSelection, getCoreRowModel: getCoreRowModel(), getSortedRowModel: getSortedRowModel(), getFilteredRowModel: getFilteredRowModel() })
 
-  useEffect(() => { if (!id) return; const f = async () => { try { const [d, p, pg] = await Promise.all([ fetch(`http://localhost:8000/databases/${id}`).then(r=>r.json()), fetch(`http://localhost:8000/databases/${id}/properties`).then(r=>r.json()), fetch(`http://localhost:8000/databases/${id}/pages`).then(r=>r.json()) ]); setDatabase(d); setProperties(p); setPages(pg); const vMap: any = {}; for(const page of pg) { const vals = await fetch(`http://localhost:8000/pages/${page.id}/values`).then(r=>r.json()); vMap[page.id] = {}; vals.forEach((v:any)=>{if(v.value)vMap[page.id][v.property_id]=JSON.parse(v.value)}) } setPageValues(vMap); setLoading(false) } catch(e){console.error(e);setLoading(false)} }; f() }, [id])
+  useEffect(() => { 
+      if (!id) return; 
+      const f = async () => { 
+          try { 
+              const [d, p, pg] = await Promise.all([ 
+                  fetch(`http://localhost:8000/databases/${id}`).then(r=>r.json()), 
+                  fetch(`http://localhost:8000/databases/${id}/properties`).then(r=>r.json()), 
+                  fetch(`http://localhost:8000/databases/${id}/pages`).then(r=>r.json()) 
+              ]); 
+              setDatabase(d); 
+              setProperties(p); 
+              setPages(pg); 
+              
+              const vMap: any = {}; 
+              for(const page of pg) { 
+                  const vals = await fetch(`http://localhost:8000/pages/${page.id}/values`).then(r=>r.json()); 
+                  vMap[page.id] = {}; 
+                  vals.forEach((v: any) => { 
+                      vMap[page.id][v.property_id] = v 
+                  }) 
+              } 
+              setPageValues(vMap); 
+              setLoading(false) 
+          } catch(e){console.error(e);setLoading(false)} 
+      }; 
+      f() 
+  }, [id])
 
   if (loading) return <div className="flex items-center justify-center min-h-screen text-notion-muted">Yükleniyor...</div>
   if (!database) return <div className="flex items-center justify-center min-h-screen text-red-500">Veritabanı bulunamadı</div>
@@ -367,15 +546,17 @@ export default function DatabasePage() {
           <StatusEditModal
             isOpen={true}
             onClose={() => setActiveStatusModal(null)}
+            title={activeStatusModal.propertyName}
             currentValue={activeStatusModal.currentValue}
             options={activeStatusModal.options}
+            propType={activeStatusModal.propType}
             multiple={activeStatusModal.propType === 'multi_select'}
             onChange={(newValue) => {
               const payload = Array.isArray(newValue) ? { option_ids: newValue } : { option_id: newValue }
               handlePropertyValueUpdate(activeStatusModal.pageId, activeStatusModal.propertyId, payload)
             }}
-            onCreate={(name, group) => {
-               const newOpt = { id: crypto.randomUUID(), name, color: 'gray', group }
+            onCreate={(name, color, group) => {
+               const newOpt = { id: crypto.randomUUID(), name, color: color || 'gray', group }
                const newOptions = [...activeStatusModal.options, newOpt]
                updatePropertyOptions(activeStatusModal.propertyId, newOptions)
                
