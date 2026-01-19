@@ -5,6 +5,8 @@ import { useCreateBlockNote } from "@blocknote/react";
 import { BlockNoteView } from "@blocknote/mantine";
 import "@blocknote/mantine/style.css"; 
 import { Home, Database, ChevronLeft } from "lucide-react"; // İkonları ekledik
+import IconPicker from "../components/IconPicker";
+import { useUpdatePageIcon } from "../hooks/apiHooks";
 
 interface PageData {
   id: string;
@@ -22,6 +24,7 @@ export default function EditorPage() {
   const [page, setPage] = useState<PageData | null>(null);
   const [loading, setLoading] = useState(true);
   const [title, setTitle] = useState("");
+  const updateIconMutation = useUpdatePageIcon(id!);
 
   // Editörü başlat
   const editor = useCreateBlockNote();
@@ -161,11 +164,17 @@ export default function EditorPage() {
       </div>
 
       <div className="max-w-4xl mx-auto px-12 relative">
-        {/* --- İKON --- */}
+        {/* --- İKON (GÜNCELLENDİ) --- */}
         <div className="-mt-10 mb-4 relative group w-20 h-20">
-          <div className="text-6xl cursor-pointer hover:bg-[#2C2C2C] rounded p-1 transition-colors select-none">
-            {page.icon || "📄"}
-          </div>
+             <IconPicker 
+                icon={page.icon || ""} 
+                onChange={(newIcon) => {
+                    // 1. Ekranda anında değişsin diye:
+                    setPage(prev => prev ? { ...prev, icon: newIcon } : null);
+                    // 2. Backend'e kaydetsin diye:
+                    updateIconMutation.mutate(newIcon);
+                }} 
+             />
         </div>
 
         {/* --- BAŞLIK ALANI --- */}

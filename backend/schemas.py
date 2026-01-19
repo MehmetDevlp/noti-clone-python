@@ -81,7 +81,10 @@ class PageResponse(PageBase):
     
     class Config:
         from_attributes = True
-
+        
+class DatabaseUpdate(BaseModel):
+    title: str | None = None
+    icon: str | None = None
 # =======================
 # 4. VERİTABANI (DATABASE) ŞEMALARI
 # =======================

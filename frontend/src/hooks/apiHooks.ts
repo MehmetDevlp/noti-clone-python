@@ -123,3 +123,40 @@ export const useUpdatePropertyConfig = (databaseId: string) => {
         onSuccess: () => queryClient.invalidateQueries({ queryKey: ['database', databaseId] })
     })
 }
+// --- VERİTABANI İKONU GÜNCELLEME ---
+export const useUpdateDatabaseIcon = (databaseId: string) => {
+    const queryClient = useQueryClient()
+    return useMutation({
+        mutationFn: async (icon: string) => {
+            await fetch(`${API_URL}/databases/${databaseId}`, { 
+                method: 'PATCH', 
+                headers: {'Content-Type':'application/json'}, 
+                body: JSON.stringify({ icon })
+            })
+        },
+        onSuccess: () => {
+             queryClient.invalidateQueries({ queryKey: ['database', databaseId] })
+             // Sidebar'daki listeyi de güncellemek için global bir invalidate gerekebilir
+             // Ama şimdilik sayfa içi yeterli. Sidebar için:
+             queryClient.invalidateQueries({ queryKey: ['databases'] }) 
+        }
+    })
+}
+// --- SAYFA İKONU GÜNCELLEME (Bunu en alta ekle) ---
+export const useUpdatePageIcon = (pageId: string) => {
+    const queryClient = useQueryClient()
+    return useMutation({
+        mutationFn: async (icon: string) => {
+            await fetch(`${API_URL}/pages/${pageId}`, { 
+                method: 'PATCH', 
+                headers: {'Content-Type':'application/json'}, 
+                body: JSON.stringify({ icon })
+            })
+        },
+        onSuccess: () => {
+             queryClient.invalidateQueries({ queryKey: ['page', pageId] })
+             queryClient.invalidateQueries({ queryKey: ['pages'] }) 
+             queryClient.invalidateQueries({ queryKey: ['databases'] }) 
+        }
+    })
+}

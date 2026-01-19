@@ -133,3 +133,24 @@ def root():
 @app.get("/health")
 def health():
     return {"status": "healthy"}
+
+@app.patch("/databases/{database_id}")
+def update_database(database_id: str, update: schemas.DatabaseUpdate, db: Session = Depends(get_db)):
+    # Bak buraya 'schemas.' ekledik, sorun çözüldü!
+    db_item = db.query(models.Database).filter(models.Database.id == database_id).first()
+    if not db_item:
+        raise HTTPException(status_code=404, detail="Database not found")
+    
+    if update.title is not None:
+        db_item.title = update.title
+    if update.icon is not None:
+        db_item.icon = update.icon
+        
+    db.commit()
+    db.refresh(db_item)
+    return db_item
+@app.get("/search")
+def search_items(q: str, db: Session = Depends(get_db)):
+    if not q:
+        return []
+    return crud.search_everything(db, q)

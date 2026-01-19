@@ -47,3 +47,115 @@ body {
   scrollbar-width: thin;
   scrollbar-color: #404040 #191919;
 }
+/* --- CALENDAR DARK MODE FIX --- */
+
+.rbc-calendar {
+    background-color: #191919;
+    font-family: ui-sans-serif, system-ui, sans-serif;
+}
+
+/* 1. ÇERÇEVELERİ ZORLA AÇIYORUZ */
+
+/* Dış Çerçeve */
+.rbc-month-view {
+    border: 1px solid #404040 !important; /* Rengi biraz açtım görünsün diye */
+    border-radius: 6px;
+}
+
+/* Başlık Altı */
+.rbc-header {
+    border-bottom: 1px solid #404040 !important;
+}
+
+/* Yatay Çizgiler (Satırlar) */
+.rbc-month-row + .rbc-month-row {
+    border-top: 1px solid #404040 !important;
+}
+
+/* Dikey Çizgiler (Sütunlar) */
+.rbc-day-bg + .rbc-day-bg {
+    border-left: 1px solid #404040 !important;
+}
+
+/* 2. TOOLBAR VE BUTONLAR */
+.rbc-toolbar {
+    margin-bottom: 16px !important;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.rbc-toolbar-label {
+    color: white !important;
+    font-size: 16px !important;
+    font-weight: 700 !important;
+    text-transform: capitalize !important; 
+}
+
+.rbc-toolbar button {
+    color: #9ca3af !important;
+    border: 1px solid #404040 !important;
+    background: transparent !important;
+    padding: 5px 12px !important;
+    border-radius: 4px !important;
+    cursor: pointer;
+}
+
+.rbc-toolbar button:hover {
+    background-color: #2c2c2c !important;
+    color: white !important;
+}
+
+.rbc-toolbar button.rbc-active {
+    background-color: #404040 !important;
+    color: white !important;
+}
+
+/* 3. GÜN İSİMLERİ (PZT, SAL) */
+.rbc-header {
+    padding: 12px 0 !important;
+    color: #9ca3af !important;
+    font-size: 11px !important;
+    font-weight: 600 !important;
+    text-transform: uppercase !important;
+}
+
+/* 4. GÜN KUTULARI */
+.rbc-day-bg {
+    background-color: transparent !important;
+}
+
+/* Gün Numaraları */
+.rbc-date-cell {
+    padding: 8px !important;
+    font-size: 12px !important;
+    color: #e5e5e5 !important;
+    opacity: 0.9 !important;
+    text-align: right; 
+}
+
+/* Diğer Ayın Günleri (Soluk) */
+.rbc-off-range-bg {
+    background-color: transparent !important;
+}
+.rbc-off-range .rbc-date-cell {
+    color: #404040 !important;
+}
+
+/* Bugün */
+.rbc-today {
+    background-color: #262626 !important;
+}
+
+/* 5. ETKİNLİKLER */
+.rbc-event {
+    background-color: #2c2c2c !important;
+    border: 1px solid #404040 !important;
+    padding: 2px 6px !important;
+    border-radius: 4px !important;
+}
+
+/* Mavi seçimi kaldır */
+.rbc-day-slot .rbc-event, .rbc-day-slot .rbc-background-event {
+    border-color: #404040 !important; 
+}

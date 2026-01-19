@@ -1,7 +1,8 @@
 from sqlalchemy.orm import Session
 import models, schemas
 import uuid
-from datetime import datetime # Bu import çok önemli, eksik olursa çalışmaz
+from datetime import datetime
+from sqlalchemy import or_
 
 # --- YARDIMCI FONKSİYON: GÜVENLİ TARİH ÇEVİRİCİ ---
 def safe_parse_date(date_val):
@@ -184,3 +185,47 @@ def set_property_value(db: Session, value_data: schemas.PropertyValueSet):
     db.commit()
     db.refresh(db_value)
     return db_value
+def search_everything(db: Session, query: str):
+    # 1. Sayfalarda Ara (Başlık veya İçerik)
+    # ilike = harf büyüklüğüne bakmadan arar (case-insensitive)
+    pages = db.query(models.Page).filter(
+        or_(
+            models.Page.title.ilike(f"%{query}%"),
+            models.Page.content.ilike(f"%{query}%")
+        )
+    ).all()
+
+    # 2. Veritabanı Başlıklarında Ara
+    databases = db.query(models.Database).filter(
+        models.Database.title.ilike(f"%{query}%")
+    ).all()
+
+    results = []
+
+    # Veritabanlarını listeye ekle
+    for db_item in databases:
+        results.append({
+            "id": db_item.id,
+            "title": db_item.title,
+            "type": "database",
+            "icon": db_item.icon,
+            "context": "Veritabanı"
+        })
+
+    # Sayfaları listeye ekle
+    for page in pages:
+        # İçerikte geçiyorsa kullanıcıya ipucu verelim
+        context = "Sayfa Başlığı"
+        if page.content and query.lower() in page.content.lower():
+            context = "Sayfa İçeriği"
+            
+        results.append({
+            "id": page.id,
+            "title": page.title,
+            "type": "page",
+            "icon": page.icon,
+            "context": context,
+            "database_id": page.database_id # Eğer bir veritabanına bağlıysa oraya gitsin
+        })
+
+    return results
