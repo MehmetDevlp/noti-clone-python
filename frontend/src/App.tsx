@@ -1,18 +1,24 @@
 import { Routes, Route } from 'react-router-dom'
-import Layout from './components/Layout' // Senin mevcut Layout bileşenin
+import { Toaster } from 'react-hot-toast'
+import Layout from './components/Layout'
 import HomePage from './pages/HomePage'
 import DatabasePage from './pages/DatabasePage'
 import EditorPage from './pages/EditorPage'
-// 1. CommandMenu'yu import et
 import CommandMenu from './components/CommandMenu'
 
 function App() {
   return (
     <>
-      {/* 2. Global olarak buraya ekliyoruz (Layout'tan bağımsız çalışsın diye) */}
+      {/* GÜNCELLENDİ: Sağ Üstte ve Her Şeyin Üstünde */}
+      <Toaster 
+        position="top-right" 
+        containerStyle={{
+          zIndex: 99999 // Bu sayı modal'dan yüksek olduğu için artık üstte çıkacak
+        }}
+      />
+
       <CommandMenu />
       
-      {/* Senin mevcut düzenin aynen devam ediyor */}
       <Layout>
         <Routes>
           <Route path="/" element={<HomePage />} />

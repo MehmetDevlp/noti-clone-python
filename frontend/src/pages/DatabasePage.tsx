@@ -1,6 +1,8 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { Table as TableIcon, KanbanSquare as LayoutKanban, Calendar as CalendarIcon, Trash, X, Filter } from 'lucide-react'
+import { z } from 'zod'
+import toast from 'react-hot-toast' // <-- YENİ IMPORT
 import CalendarView from '../components/views/CalendarView'
 import AddPropertyModal from '../components/AddPropertyModal'
 import IconPicker from '../components/IconPicker'
@@ -20,14 +22,18 @@ import {
 } from '../hooks/apiHooks'
 import Modal from '../components/Modal'
 
+// --- DOĞRULAMA ŞEMASI ---
+const createPageSchema = z.object({
+  title: z.string()
+    .min(1, "Sayfa başlığı boş bırakılamaz.")
+    .max(50, "Sayfa başlığı 50 karakterden uzun olamaz.")
+})
+
 export default function DatabasePage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
-  
-  // URL PARAMETRELERİ
   const [searchParams, setSearchParams] = useSearchParams()
   
-  // --- REACT QUERY ---
   const { data, isLoading, isError } = useDatabaseData(id!)
   
   const database = data?.database
@@ -35,7 +41,6 @@ export default function DatabasePage() {
   const pages = data?.pages || []
   const pageValues = data?.pageValues || {}
 
-  // --- MUTATIONS ---
   const addPageMutation = useAddPage(id!)
   const updateValueMutation = useUpdateValue(id!)
   const updateTitleMutation = useUpdateTitle(id!)
@@ -45,7 +50,6 @@ export default function DatabasePage() {
   const updateConfigMutation = useUpdatePropertyConfig(id!)
   const updateIconMutation = useUpdateDatabaseIcon(id!)
 
-  // --- STATE ---
   const [currentView, setCurrentView] = useState<'table' | 'board' | 'calendar'>(
       (searchParams.get('view') as 'table' | 'board' | 'calendar') || 'table'
   )
@@ -54,7 +58,6 @@ export default function DatabasePage() {
   const [showAddPropertyModal, setShowAddPropertyModal] = useState(false)
   const [activeStatusModal, setActiveStatusModal] = useState<any>(null)
   
-  // FİLTRE STATE
   const [showActiveOnly, setShowActiveOnly] = useState(false)
 
   const [createPageModal, setCreatePageModal] = useState<{ isOpen: boolean, dateStr: string | null, statusId: string | null }>({ 
@@ -62,27 +65,43 @@ export default function DatabasePage() {
       dateStr: null, 
       statusId: null 
   })
+  
   const [newPageTitle, setNewPageTitle] = useState("")
+  // formError STATE'İNİ SİLDİK, ARTIK TOAST VAR
 
-  // --- VIEW DEĞİŞTİRME ---
   const handleViewChange = (view: 'table' | 'board' | 'calendar') => {
       setCurrentView(view)
       setSearchParams({ view })
   }
 
-  // --- FONKSİYONLAR ---
-  
   const openCreateModal = (dateStr: string | null = null, statusId: string | null = null) => {
     setNewPageTitle("") 
+    // Hata temizlemeye gerek kalmadı
     setCreatePageModal({ isOpen: true, dateStr, statusId })
   }
 
   const submitCreatePage = () => {
+    // 1. Zod Kontrolü
+    const result = createPageSchema.safeParse({ title: newPageTitle })
+
+    if (!result.success) {
+        // HATA VARSA TOAST FIRLAT!
+        toast.error(result.error.issues[0].message)
+        return
+    }
+    
+    // 2. İşlem Başlıyor
     const title = newPageTitle 
     const { dateStr, statusId } = createPageModal
 
+    // Yükleniyor bildirimi (Opsiyonel ama şık durur)
+    const toastId = toast.loading('Oluşturuluyor...')
+
     addPageMutation.mutate(title, {
         onSuccess: (newPage: any) => {
+            // BAŞARILI OLURSA
+            toast.success('Sayfa oluşturuldu!', { id: toastId }) // Loading'i silip Success yap
+
             if (dateStr) {
                  const dateProp = properties.find((pr:any) => pr.type === 'date')
                  if(dateProp) {
@@ -104,12 +123,18 @@ export default function DatabasePage() {
                 }
             }
             setCreatePageModal({ isOpen: false, dateStr: null, statusId: null })
+        },
+        onError: () => {
+            // SUNUCU HATASI OLURSA
+            toast.error('Bir hata oluştu, sayfa oluşturulamadı.', { id: toastId })
         }
     })
   }
 
   const handleQuickAdd = () => {
-     addPageMutation.mutate('')
+     addPageMutation.mutate('', {
+         onSuccess: () => toast.success('Yeni satır eklendi')
+     })
   }
 
   const handleDeleteSelected = async () => {
@@ -120,6 +145,7 @@ export default function DatabasePage() {
     for (const pid of selectedIds) {
         deletePageMutation.mutate(pid)
     }
+    toast.success(`${selectedIds.length} sayfa silindi`)
     setRowSelection({})
   }
 
@@ -131,7 +157,6 @@ export default function DatabasePage() {
   return (
     <div className="min-h-screen p-8 bg-[#191919] text-white">
       <div className="max-w-[1400px] mx-auto">
-        {/* HEADER */}
           <div className="flex items-center gap-3 mb-6">
             <IconPicker 
               icon={database.icon} 
@@ -140,15 +165,12 @@ export default function DatabasePage() {
             <h1 className="text-3xl font-bold">{database.title}</h1>
           </div>
 
-        {/* TABS (SEKMELER) */}
         <div className="flex items-center gap-4 border-b border-[#373737] mb-4">
             <button onClick={() => handleViewChange('table')} className={`flex items-center gap-2 pb-2 text-sm font-medium border-b-2 transition-colors ${currentView==='table'?'border-white text-white':'border-transparent text-gray-500 hover:text-gray-300'}`}><TableIcon size={16}/> Tablo</button>
             <button onClick={() => handleViewChange('board')} className={`flex items-center gap-2 pb-2 text-sm font-medium border-b-2 transition-colors ${currentView==='board'?'border-white text-white':'border-transparent text-gray-500 hover:text-gray-300'}`}><LayoutKanban size={16}/> Pano</button>
             <button onClick={() => handleViewChange('calendar')} className={`flex items-center gap-2 pb-2 text-sm font-medium border-b-2 transition-colors ${currentView==='calendar'?'border-white text-white':'border-transparent text-gray-500 hover:text-gray-300'}`}><CalendarIcon size={16}/> Takvim</button>
         </div>
 
-        {/* --- YENİ ARAÇ ÇUBUĞU (TOOLBAR) --- */}
-        {/* Sadece Pano görünümündeyken ve sekmelerin altında çıkacak */}
         {currentView === 'board' && (
             <div className="flex items-center gap-2 mb-4 animate-in fade-in slide-in-from-top-2 duration-200">
                 <button 
@@ -165,14 +187,13 @@ export default function DatabasePage() {
             </div>
         )}
 
-       {/* GÖRÜNÜMLER */}
         {currentView === 'table' && (
             <TableView 
                 databaseId={id!} 
                 properties={properties} 
                 pages={pages} 
                 pageValues={pageValues}
-                onAddPage={() => handleQuickAdd()}
+                onAddPage={() => handleQuickAdd()} 
                 onOpenPage={(pid) => navigate(`/page/${pid}`)}
                 onUpdateTitle={(pid, title) => updateTitleMutation.mutate({ pageId: pid, title })}
                 onUpdateValue={(pid, propId, val) => updateValueMutation.mutate({ pageId: pid, propertyId: propId, value: val })}
@@ -210,7 +231,6 @@ export default function DatabasePage() {
             />
         )}
 
-        {/* SELECTION BAR */}
         {selectedCount > 0 && (
           <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 bg-[#252525] border border-[#373737] px-4 py-2 rounded-lg shadow-2xl animate-in slide-in-from-bottom-5 fade-in duration-200">
              <div className="bg-blue-500 text-white text-xs font-bold px-2 py-0.5 rounded">{selectedCount}</div>
@@ -221,7 +241,6 @@ export default function DatabasePage() {
           </div>
         )}
 
-        {/* MODALS */}
         {showAddPropertyModal && (
             <AddPropertyModal 
                 databaseId={id!} 
@@ -260,11 +279,14 @@ export default function DatabasePage() {
                       autoFocus
                       type="text" 
                       value={newPageTitle}
-                      onChange={(e) => setNewPageTitle(e.target.value)}
+                      onChange={(e) => {
+                          setNewPageTitle(e.target.value)
+                      }}
                       onKeyDown={(e) => e.key === 'Enter' && submitCreatePage()}
                       placeholder="Örn: Toplantı, Görev..."
                       className="w-full bg-[#151515] border border-[#373737] rounded px-3 py-2 text-white outline-none focus:border-blue-500 transition-colors"
                   />
+                  {/* HATA MESAJI ALANI SİLİNDİ, TOAST VAR */}
               </div>
           </Modal>
 

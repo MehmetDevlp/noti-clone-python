@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect, useRef } from 'react'
 import { Plus, Calendar, KanbanSquare as LayoutKanban } from 'lucide-react'
 import {
   DndContext,
@@ -30,7 +30,6 @@ interface BoardViewProps {
     onOpenPage: (pageId: string) => void
     onOpenStatusModal: (propId: string, propName: string, options: any[], propType: string) => void
     onUpdateValue: (pageId: string, propertyId: string, value: any) => void
-    // YENİ: Boş grupları gizle özelliği
     hideEmptyGroups?: boolean
 }
 
@@ -74,13 +73,11 @@ const SortableItem = ({ page, properties, pageValues, groupProperty, onOpenPage 
     )
 }
 
-// GÜNCELLENDİ: hideEmptyGroups prop'u eklendi
 export default function BoardView({ properties, pages, pageValues, onAddPage, onOpenPage, onOpenStatusModal, onUpdateValue, hideEmptyGroups = false }: BoardViewProps) {
     const [activeId, setActiveId] = useState<string | null>(null)
     const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }), useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }))
     const groupProperty = properties.find(p => p.type === 'status') || properties.find(p => p.type === 'select')
 
-    // SIRALAMA MANTIĞI (Aynı kalıyor)
     const sortedOptions = useMemo(() => {
         if (!groupProperty) return []
         const rawOptions = groupProperty.config?.options || []
@@ -101,7 +98,6 @@ export default function BoardView({ properties, pages, pageValues, onAddPage, on
         })
     }, [groupProperty])
 
-    // SÜTUNLARI HAZIRLAMA
     const columns = useMemo(() => {
         if (!groupProperty) return {}
         const cols: Record<string, any[]> = {}
@@ -137,23 +133,14 @@ export default function BoardView({ properties, pages, pageValues, onAddPage, on
     return (
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
             <div className="flex gap-4 overflow-x-auto p-4 h-[calc(100vh-200px)] items-start bg-[#191919]">
-                {/* 1. GRUPSUZ ALAN (Varsa) */}
                 {columns['uncategorized'] && columns['uncategorized'].length > 0 && (
                     <BoardColumn id="uncategorized" title="Grupsuz" items={columns['uncategorized']} count={columns['uncategorized'].length} color="default" onAddPage={() => onAddPage()} onOpenPage={onOpenPage} properties={properties} pageValues={pageValues} groupProperty={groupProperty} />
                 )}
                 
-                {/* 2. ANA SÜTUNLAR */}
                 {sortedOptions.map((opt: any) => {
                     const items = columns[opt.id] || []
                     const count = items.length
-
-                    // --- YENİ EKLENEN FİLTRELEME ---
-                    // Eğer 'hideEmptyGroups' açıksa ve sütun boşsa, HİÇ RENDER ETME
-                    if (hideEmptyGroups && count === 0) {
-                        return null
-                    }
-                    // --------------------------------
-
+                    if (hideEmptyGroups && count === 0) return null
                     return (
                         <BoardColumn 
                             key={opt.id} id={opt.id} title={opt.name} items={items} count={count} color={opt.color}
@@ -175,10 +162,37 @@ export default function BoardView({ properties, pages, pageValues, onAddPage, on
     )
 }
 
+// --- GÜNCELLENEN AKILLI SÜTUN BİLEŞENİ ---
 function BoardColumn({ id, title, items, count, color, onAddPage, onOpenPage, properties, pageValues, groupProperty }: any) {
     const { setNodeRef } = useSortable({ id: id, data: { type: 'container' } }) 
     const { style: badgeStyle } = getBadgeStyle(color)
     const { style: colStyle, className: colClass } = getColumnStyle(color)
+    
+    // --- INFINITE SCROLL (SONSUZ KAYDIRMA) MANTIĞI ---
+    const [visibleCount, setVisibleCount] = useState(20) // Başlangıçta 20 öğe göster
+    
+    // Görünen öğeleri filtrele
+    const displayedItems = useMemo(() => items.slice(0, visibleCount), [items, visibleCount])
+
+    const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
+        const { scrollTop, scrollHeight, clientHeight } = e.currentTarget
+        
+        // En alta 100px kala yeni öğeleri yükle
+        if (scrollHeight - scrollTop - clientHeight < 100) {
+            if (visibleCount < items.length) {
+                // Parça parça artır (Performans için)
+                setVisibleCount(prev => Math.min(prev + 20, items.length))
+            }
+        }
+    }
+
+    // items değiştiğinde (örn: filtreleme) sayacı sıfırla veya güncelle
+    useEffect(() => {
+        if (items.length < visibleCount) {
+             setVisibleCount(Math.max(20, items.length))
+        }
+    }, [items.length])
+
     return (
         <div ref={setNodeRef} style={colStyle} className={`min-w-[280px] w-[280px] flex flex-col gap-3 shrink-0 p-2 rounded-xl transition-all max-h-full ${colClass}`}>
             <div className="flex items-center justify-between px-2 py-1 group/col shrink-0">
@@ -187,10 +201,24 @@ function BoardColumn({ id, title, items, count, color, onAddPage, onOpenPage, pr
                     <span className="px-1.5 py-0.5 text-xs bg-black/20 text-gray-400 rounded-full">{count}</span>
                 </div>
             </div>
-            <div className="flex-1 overflow-y-auto space-y-2 pb-2 custom-scrollbar pr-1 min-h-[50px]">
-                <SortableContext items={items.map((p:any) => p.id)} strategy={verticalListSortingStrategy}>
-                    {items.map((page:any) => (<SortableItem key={page.id} id={page.id} page={page} properties={properties} pageValues={pageValues} groupProperty={groupProperty} onOpenPage={onOpenPage}/>))}
+            
+            {/* onScroll Event'i eklendi */}
+            <div 
+                className="flex-1 overflow-y-auto space-y-2 pb-2 custom-scrollbar pr-1 min-h-[50px]"
+                onScroll={handleScroll}
+            >
+                {/* Sadece displayedItems render ediliyor */}
+                <SortableContext items={displayedItems.map((p:any) => p.id)} strategy={verticalListSortingStrategy}>
+                    {displayedItems.map((page:any) => (
+                        <SortableItem key={page.id} id={page.id} page={page} properties={properties} pageValues={pageValues} groupProperty={groupProperty} onOpenPage={onOpenPage}/>
+                    ))}
                 </SortableContext>
+                
+                {/* Yükleniyor göstergesi (Opsiyonel) */}
+                {visibleCount < items.length && (
+                    <div className="text-center text-xs text-gray-500 py-2 animate-pulse">Daha fazlası yükleniyor...</div>
+                )}
+
                 <button className="flex items-center gap-2 text-gray-400 hover:text-white text-sm p-2 rounded hover:bg-black/10 w-full transition-colors mt-1 font-medium" onClick={onAddPage}><Plus size={16}/> Yeni</button>
             </div>
         </div>
