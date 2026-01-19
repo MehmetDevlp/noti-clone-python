@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { X, Type, List, CheckSquare, Calendar, Tag, AlertCircle } from 'lucide-react'
+import { X, Type, List, CheckSquare, Calendar, Tag } from 'lucide-react'
+import toast from 'react-hot-toast' // <-- 1. TOAST IMPORT EDİLDİ
 
 const TYPE_ICONS = {
   text: <Type size={16} />,
@@ -30,20 +31,18 @@ export default function AddPropertyModal({ databaseId, onClose, onSuccess }: Add
   const [selectedType, setSelectedType] = useState('status') 
   const [isLoading, setIsLoading] = useState(false)
   
-  // YENİ: Hata durumu için state
-  const [error, setError] = useState<string | null>(null)
+  // ESKİ "error" STATE'İ SİLİNDİ, ARTIK TOAST VAR
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     
-    // YENİ: Doğrulama (Validation)
+    // VALIDATION (TOAST İLE)
     if (!name.trim()) {
-       setError("Lütfen bir özellik ismi giriniz.")
+       toast.error("Lütfen bir özellik ismi giriniz.") // <-- HATA BİLDİRİMİ
        return
     }
 
     setIsLoading(true)
-    setError(null) // Hatayı temizle
 
     let initialConfig = {}
     if (selectedType === 'status') {
@@ -71,19 +70,15 @@ export default function AddPropertyModal({ databaseId, onClose, onSuccess }: Add
       if (!response.ok) throw new Error('Sunucu hatası')
       
       const data = await response.json()
+      
+      toast.success(`${name} özelliği eklendi`) // <-- BAŞARI BİLDİRİMİ
       onSuccess(data)
       onClose()
     } catch (err: any) {
-      setError("Bir hata oluştu: " + err.message)
+      toast.error("Bir hata oluştu: " + err.message) // <-- SUNUCU HATASI
     } finally {
       setIsLoading(false)
     }
-  }
-
-  // Input değişince hatayı temizle
-  const handleNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-      setName(e.target.value)
-      if (error) setError(null)
   }
 
   return (
@@ -104,18 +99,11 @@ export default function AddPropertyModal({ databaseId, onClose, onSuccess }: Add
               autoFocus
               type="text" 
               value={name}
-              onChange={handleNameChange}
-              // YENİ: Hata varsa border kırmızı oluyor
-              className={`w-full bg-[#151515] border rounded p-2 text-white text-sm outline-none transition-colors ${error ? 'border-red-500 focus:border-red-500' : 'border-[#373737] focus:border-blue-500'}`}
+              onChange={(e) => setName(e.target.value)}
+              className="w-full bg-[#151515] border border-[#373737] focus:border-blue-500 rounded p-2 text-white text-sm outline-none transition-colors"
               placeholder="Örn: Durum, Öncelik..."
             />
-            {/* YENİ: Hata mesajı */}
-            {error && (
-                <div className="flex items-center gap-1 mt-1 text-red-400 text-xs animate-in slide-in-from-top-1">
-                    <AlertCircle size={12} />
-                    <span>{error}</span>
-                </div>
-            )}
+            {/* ESKİ KIRMIZI HATA YAZISI KALDIRILDI */}
           </div>
 
           <div>

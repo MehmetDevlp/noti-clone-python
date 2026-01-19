@@ -3,8 +3,9 @@ import { useNavigate, useLocation } from 'react-router-dom'
 import { 
   ChevronsLeft, Menu, Plus, Search, Settings, Home, Trash
 } from 'lucide-react'
+import toast from 'react-hot-toast' // <-- 1. TOAST EKLENDİ
 import Modal from './Modal'
-import { useCommandStore } from '../store/useCommandStore' // 1. YENİ: Store'u ekledik
+import { useCommandStore } from '../store/useCommandStore'
 
 interface SidebarProps {
   isOpen: boolean
@@ -22,7 +23,6 @@ export default function Sidebar({ isOpen, toggle }: SidebarProps) {
   const navigate = useNavigate()
   const location = useLocation()
   
-  // 2. YENİ: Menüyü açma fonksiyonunu çektik
   const { setOpen } = useCommandStore() 
 
   const [databases, setDatabases] = useState<SidebarItem[]>([])
@@ -61,7 +61,12 @@ export default function Sidebar({ isOpen, toggle }: SidebarProps) {
   // --- İŞLEM FONKSİYONLARI ---
 
   const submitCreateDatabase = async () => {
-    if (!newDbTitle.trim()) return
+    // 1. GÜVENLİK VE BİLDİRİM
+    if (!newDbTitle.trim()) {
+        toast.error("Veritabanı ismi boş olamaz")
+        return
+    }
+
     try {
       const res = await fetch('http://localhost:8000/databases', {
         method: 'POST',
@@ -71,14 +76,30 @@ export default function Sidebar({ isOpen, toggle }: SidebarProps) {
       if (res.ok) {
         const data = await res.json()
         navigate(`/database/${data.id}`)
+        
+        // GÜNCELLEME VE BİLDİRİM
         fetchData()
+        window.dispatchEvent(new Event('sidebar-update')) // Diğer yerleri de güncelle
+        
         setIsCreateDbOpen(false)
         setNewDbTitle("")
+        toast.success("Veritabanı oluşturuldu")
+      } else {
+        toast.error("Oluşturulurken hata oluştu")
       }
-    } catch (e) { console.error(e) }
+    } catch (e) { 
+        console.error(e)
+        toast.error("Sunucu hatası")
+    }
   }
 
   const submitCreatePage = async () => {
+    // 1. GÜVENLİK VE BİLDİRİM
+    if (!newPageTitle.trim()) {
+        toast.error("Sayfa başlığı boş olamaz")
+        return
+    }
+
     try {
       const res = await fetch('http://localhost:8000/pages', {
         method: 'POST',
@@ -88,11 +109,21 @@ export default function Sidebar({ isOpen, toggle }: SidebarProps) {
       if (res.ok) {
         const data = await res.json()
         navigate(`/page/${data.id}`)
+        
+        // GÜNCELLEME VE BİLDİRİM
         fetchData()
+        window.dispatchEvent(new Event('sidebar-update'))
+        
         setIsCreatePageOpen(false)
         setNewPageTitle("")
+        toast.success("Sayfa oluşturuldu")
+      } else {
+        toast.error("Oluşturulurken hata oluştu")
       }
-    } catch (e) { console.error(e) }
+    } catch (e) { 
+        console.error(e)
+        toast.error("Sunucu hatası")
+    }
   }
 
   const confirmDelete = async () => {
@@ -104,9 +135,17 @@ export default function Sidebar({ isOpen, toggle }: SidebarProps) {
         const res = await fetch(`http://localhost:8000/${endpoint}/${id}`, { method: 'DELETE' })
         if (res.ok) {
             fetchData()
+            window.dispatchEvent(new Event('sidebar-update')) // Silindiğini herkese duyur
+            
             if (location.pathname.includes(id)) navigate('/')
+            toast.success("Öğe silindi")
+        } else {
+            toast.error("Silinemedi")
         }
-    } catch (err) { console.error(err) }
+    } catch (err) { 
+        console.error(err) 
+        toast.error("Sunucu hatası")
+    }
     finally {
         setDeleteTarget(null)
     }
@@ -114,14 +153,12 @@ export default function Sidebar({ isOpen, toggle }: SidebarProps) {
 
   return (
     <>
-      {/* MOBİL BUTON */}
       {!isOpen && (
         <button onClick={toggle} className="fixed top-4 left-4 z-50 p-2 bg-[#202020] text-gray-400 hover:text-white rounded-md shadow-lg border border-[#373737]">
           <Menu size={20} />
         </button>
       )}
 
-      {/* SIDEBAR PANELİ */}
       <div className={`fixed top-0 left-0 h-screen bg-[#202020] border-r border-[#373737] transition-all duration-300 ease-in-out z-40 flex flex-col ${isOpen ? 'w-64 translate-x-0' : 'w-64 -translate-x-full'}`}>
         
         <div className="flex items-center justify-between p-4 hover:bg-[#2C2C2C] cursor-pointer transition-colors group">
@@ -135,14 +172,12 @@ export default function Sidebar({ isOpen, toggle }: SidebarProps) {
         </div>
 
         <div className="px-2 py-2 space-y-1">
-          {/* 3. YENİ: ARA BUTONU GÜNCELLENDİ */}
           <button 
-             onClick={() => setOpen(true)} // Tıklayınca menüyü aç
+             onClick={() => setOpen(true)} 
              className="flex items-center gap-2 w-full px-3 py-1.5 hover:bg-[#2C2C2C] rounded text-sm text-gray-400 hover:text-white transition-colors cursor-pointer group text-left"
           >
             <Search size={16} /> 
             <span>Ara</span>
-            {/* Kisayol Rozeti */}
             <span className="ml-auto text-xs text-gray-500 border border-[#373737] rounded px-1.5 py-0.5 group-hover:border-gray-500 transition-colors">
                 Ctrl K
             </span>
@@ -158,7 +193,6 @@ export default function Sidebar({ isOpen, toggle }: SidebarProps) {
              <Home size={16} /> <span>Ana Sayfa</span>
           </div>
 
-          {/* VERİTABANLARI */}
           <div className="mt-6 mb-1 px-4 flex items-center justify-between group">
             <span className="text-xs font-bold text-gray-500">VERİTABANLARI</span>
             <button onClick={() => setIsCreateDbOpen(true)} className="text-gray-500 hover:text-white opacity-0 group-hover:opacity-100 transition-opacity"><Plus size={14}/></button>
@@ -171,7 +205,6 @@ export default function Sidebar({ isOpen, toggle }: SidebarProps) {
             </div>
           ))}
 
-          {/* SAYFALAR */}
           <div className="mt-6 mb-1 px-4 flex items-center justify-between group">
             <span className="text-xs font-bold text-gray-500">SAYFALAR</span>
             <button onClick={() => setIsCreatePageOpen(true)} className="text-gray-500 hover:text-white opacity-0 group-hover:opacity-100 transition-opacity"><Plus size={14}/></button>
@@ -192,9 +225,6 @@ export default function Sidebar({ isOpen, toggle }: SidebarProps) {
         </div>
       </div>
 
-      {/* --- MODALLAR (AYNI KALDI) --- */}
-      
-      {/* 1. SİLME ONAY PENCERESİ */}
       <Modal 
         isOpen={!!deleteTarget} 
         onClose={() => setDeleteTarget(null)} 
@@ -210,7 +240,6 @@ export default function Sidebar({ isOpen, toggle }: SidebarProps) {
         <p className="text-sm text-gray-500 mt-1">Bu işlem geri alınamaz.</p>
       </Modal>
 
-      {/* 2. VERİTABANI OLUŞTURMA PENCERESİ */}
       <Modal
         isOpen={isCreateDbOpen}
         onClose={() => setIsCreateDbOpen(false)}
@@ -236,7 +265,6 @@ export default function Sidebar({ isOpen, toggle }: SidebarProps) {
         </div>
       </Modal>
 
-      {/* 3. YENİ SAYFA OLUŞTURMA PENCERESİ */}
       <Modal
         isOpen={isCreatePageOpen}
         onClose={() => setIsCreatePageOpen(false)}
@@ -259,7 +287,7 @@ export default function Sidebar({ isOpen, toggle }: SidebarProps) {
             placeholder="Örn: Toplantı Notları..."
             className="w-full bg-[#151515] border border-[#373737] rounded px-3 py-2 text-white outline-none focus:border-green-500 transition-colors"
           />
-          <p className="text-xs text-gray-500 mt-1">* Boş bırakırsanız "İsimsiz" olarak oluşturulur.</p>
+          <p className="text-xs text-gray-500 mt-1">* Boş bırakırsanız hata verir.</p>
         </div>
       </Modal>
     </>

@@ -4,13 +4,14 @@ import "@blocknote/core/fonts/inter.css";
 import { useCreateBlockNote } from "@blocknote/react";
 import { BlockNoteView } from "@blocknote/mantine";
 import "@blocknote/mantine/style.css"; 
-import { Home, Database, ChevronLeft } from "lucide-react"; // İkonları ekledik
+import { Home, Database, ChevronLeft } from "lucide-react"; 
+import toast from 'react-hot-toast'; // <-- 1. TOAST EKLENDİ
 import IconPicker from "../components/IconPicker";
 import { useUpdatePageIcon } from "../hooks/apiHooks";
 
 interface PageData {
   id: string;
-  database_id: string | null; // parent_id -> database_id olarak güncellendi ve null olabilir
+  database_id: string | null; 
   title: string;
   icon: string | null;
   cover: string | null;
@@ -24,6 +25,8 @@ export default function EditorPage() {
   const [page, setPage] = useState<PageData | null>(null);
   const [loading, setLoading] = useState(true);
   const [title, setTitle] = useState("");
+  
+  // İkon güncelleme hook'u (Zaten kendi içinde Toast veriyor)
   const updateIconMutation = useUpdatePageIcon(id!);
 
   // Editörü başlat
@@ -41,15 +44,12 @@ export default function EditorPage() {
             setPage(data);
             setTitle(data.title || "");
 
-            // --- GÜNCELLENEN KISIM ---
             if (data.content) {
-                // Eğer sayfanın kayıtlı bir içeriği varsa onu yükle
                 try {
                     const blocks = JSON.parse(data.content);
                     if (Array.isArray(blocks) && blocks.length > 0) {
                         editor.replaceBlocks(editor.document, blocks);
                     } else {
-                        // İçerik array ama boşsa temizle
                         editor.replaceBlocks(editor.document, [
                             { type: "paragraph", content: [] }
                         ]);
@@ -58,16 +58,14 @@ export default function EditorPage() {
                     console.error("İçerik parse hatası:", parseError);
                 }
             } else {
-                // ÖNEMLİ: Eğer içerik NULL ise (Yeni Sayfa), editörü sıfırla!
-                // Bunu yapmazsak önceki sayfanın yazıları ekranda kalır.
                 editor.replaceBlocks(editor.document, [
                     { type: "paragraph", content: [] }
                 ]);
             }
-            // -------------------------
 
         } catch (err) {
             console.error(err);
+            toast.error("Sayfa yüklenirken bir hata oluştu"); // <-- HATA BİLDİRİMİ
         } finally {
             setLoading(false);
         }
@@ -82,18 +80,23 @@ export default function EditorPage() {
   const handleEditorChange = () => {
     if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
 
+    // 1 saniye sonra kaydet (Debounce)
     saveTimeoutRef.current = setTimeout(async () => {
         if (!id) return;
         try {
-            await fetch(`http://localhost:8000/pages/${id}`, {
+            const res = await fetch(`http://localhost:8000/pages/${id}`, {
                 method: "PATCH",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                     content: JSON.stringify(editor.document),
                 }),
             });
+            if (!res.ok) throw new Error("Kayıt başarısız");
+            
+            // Başarılı kayıtta sessiz kalıyoruz (Notion tarzı, sürekli bildirim çıkmasın)
         } catch (err) {
             console.error("Kaydetme hatası:", err);
+            toast.error("Otomatik kayıt başarısız! İnternetinizi kontrol edin."); // <-- KRİTİK HATA BİLDİRİMİ
         }
     }, 1000);
   };
@@ -101,17 +104,20 @@ export default function EditorPage() {
   const handleTitleBlur = async () => {
     if (!id) return;
     try {
-      await fetch(`http://localhost:8000/pages/${id}`, {
+      const res = await fetch(`http://localhost:8000/pages/${id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ title }),
       });
       
-      // YENİ EKLENEN SATIR: Sidebar'ı tetikleyen sinyal
+      if (!res.ok) throw new Error("Başlık kaydedilemedi");
+
+      // Sidebar'ı güncelle
       window.dispatchEvent(new Event('sidebar-update'));
 
     } catch (err) {
       console.error("Başlık hatası:", err);
+      toast.error("Başlık kaydedilemedi"); // <-- HATA BİLDİRİMİ
     }
   };
 
@@ -132,7 +138,6 @@ export default function EditorPage() {
       {/* --- NAVİGASYON --- */}
       <div className="sticky top-0 z-50 bg-[#191919]/80 backdrop-blur-md border-b border-[#373737] px-4 py-3 flex items-center gap-2 text-sm text-gray-400">
         
-        {/* AKILLI GERİ BUTONU */}
         <button 
           onClick={() => page.database_id ? navigate(`/database/${page.database_id}`) : navigate('/')}
           className="hover:text-white hover:bg-[#2C2C2C] px-2 py-1 rounded transition-colors flex items-center gap-1 group"
@@ -164,14 +169,12 @@ export default function EditorPage() {
       </div>
 
       <div className="max-w-4xl mx-auto px-12 relative">
-        {/* --- İKON (GÜNCELLENDİ) --- */}
+        {/* --- İKON --- */}
         <div className="-mt-10 mb-4 relative group w-20 h-20">
              <IconPicker 
                 icon={page.icon || ""} 
                 onChange={(newIcon) => {
-                    // 1. Ekranda anında değişsin diye:
                     setPage(prev => prev ? { ...prev, icon: newIcon } : null);
-                    // 2. Backend'e kaydetsin diye:
                     updateIconMutation.mutate(newIcon);
                 }} 
              />
@@ -189,7 +192,7 @@ export default function EditorPage() {
           />
         </div>
 
-        {/* --- METADATA (Tarih vb.) --- */}
+        {/* --- METADATA --- */}
         <div className="flex items-center gap-6 text-gray-500 text-xs mb-8 border-b border-[#373737] pb-4">
            <span className="flex items-center gap-1">
              🕒 {formatDate(page.created_at)}

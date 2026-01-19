@@ -1,34 +1,37 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import Modal from '../components/Modal'
-import { useDatabases, useCreateDatabase } from '../hooks/useDatabases' // YENİ: Hook'ları çağırdık
+import { useDatabases, useCreateDatabase } from '../hooks/useDatabases'
+import toast from 'react-hot-toast' // <-- 1. IMPORT
 
 export default function HomePage() {
   const navigate = useNavigate()
   
-  // --- YENİ: React Query Hook'ları ---
-  // Loading, data, error... hepsi tek satırda!
   const { data: databases, isLoading, isError } = useDatabases()
   const createDatabaseMutation = useCreateDatabase()
 
-  // --- STATE ---
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [newDbTitle, setNewDbTitle] = useState("")
 
-  // --- FONKSİYONLAR ---
   const handleSubmit = async () => {
-    if (!newDbTitle.trim()) return
+    // 2. GÜVENLİK VE BİLDİRİM
+    if (!newDbTitle.trim()) {
+        toast.error("Veritabanı ismi boş olamaz")
+        return
+    }
     
-    // YENİ: Mutation kullanımı
     createDatabaseMutation.mutate(newDbTitle, {
       onSuccess: () => {
         setIsModalOpen(false)
         setNewDbTitle("")
-      }
+        
+        // 3. SENKRONİZASYON (Sidebar'ı güncelle)
+        window.dispatchEvent(new Event('sidebar-update'))
+      },
+      // Not: Toast mesajı useCreateDatabase içinde zaten veriliyor
     })
   }
 
-  // --- RENDER (Yükleniyor ve Hata Durumları) ---
   if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-[#191919] text-gray-500">
@@ -79,7 +82,6 @@ export default function HomePage() {
                     <h2 className="text-lg font-medium text-white group-hover:text-blue-400 transition-colors">
                       {db.title}
                     </h2>
-                    {/* Opsiyonel: Veritabanı ID'si veya tarihi */}
                     <p className="text-xs text-gray-500 mt-1">ID: {db.id.slice(0, 8)}...</p>
                   </div>
                 </div>
@@ -104,7 +106,7 @@ export default function HomePage() {
             </button>
             <button 
               onClick={handleSubmit} 
-              disabled={createDatabaseMutation.isPending} // Yüklenirken butonu kitle
+              disabled={createDatabaseMutation.isPending}
               className="px-3 py-1.5 text-sm bg-blue-600 hover:bg-blue-500 text-white rounded transition-colors font-medium disabled:opacity-50"
             >
               {createDatabaseMutation.isPending ? 'Oluşturuluyor...' : 'Oluştur'}

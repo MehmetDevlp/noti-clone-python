@@ -1,4 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import toast from 'react-hot-toast' // <-- 1. TOAST IMPORT EDİLDİ
 
 const API_URL = 'http://localhost:8000'
 
@@ -28,7 +29,7 @@ export const useDatabaseData = (databaseId: string) => {
   })
 }
 
-// --- SAYFA EKLEME ---
+// --- SAYFA EKLEME (Toast yok, DatabasePage yönetiyor) ---
 export const useAddPage = (databaseId: string) => {
   const queryClient = useQueryClient()
   return useMutation({
@@ -44,7 +45,7 @@ export const useAddPage = (databaseId: string) => {
   })
 }
 
-// --- DEĞER GÜNCELLEME ---
+// --- DEĞER GÜNCELLEME (Hücre değişimi - Toast yok, çok sık çalışır) ---
 export const useUpdateValue = (databaseId: string) => {
   const queryClient = useQueryClient()
   return useMutation({
@@ -59,7 +60,7 @@ export const useUpdateValue = (databaseId: string) => {
   })
 }
 
-// --- BAŞLIK GÜNCELLEME ---
+// --- BAŞLIK GÜNCELLEME (Toast yok, yazarken rahatsız etmesin) ---
 export const useUpdateTitle = (databaseId: string) => {
   const queryClient = useQueryClient()
   return useMutation({
@@ -81,9 +82,12 @@ export const useDeletePage = (databaseId: string) => {
         mutationFn: async (pageId: string) => {
             await fetch(`${API_URL}/pages/${pageId}`, { method: 'DELETE' })
         },
+        // DatabasePage.tsx içinde zaten toast.success veriyoruz, buraya eklemiyoruz.
         onSuccess: () => queryClient.invalidateQueries({ queryKey: ['database', databaseId] })
     })
 }
+
+// --- BURADAN SONRASINA TOAST EKLENDİ ---
 
 export const useDeleteProperty = (databaseId: string) => {
     const queryClient = useQueryClient()
@@ -91,7 +95,10 @@ export const useDeleteProperty = (databaseId: string) => {
         mutationFn: async (propId: string) => {
             await fetch(`${API_URL}/properties/${propId}`, { method: 'DELETE' })
         },
-        onSuccess: () => queryClient.invalidateQueries({ queryKey: ['database', databaseId] })
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['database', databaseId] })
+            toast.success('Özellik silindi') // <-- EKLENDİ
+        }
     })
 }
 
@@ -106,7 +113,10 @@ export const useRenameProperty = (databaseId: string) => {
                 body: JSON.stringify({ name })
             })
         },
-        onSuccess: () => queryClient.invalidateQueries({ queryKey: ['database', databaseId] })
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['database', databaseId] })
+            toast.success('Özellik yeniden adlandırıldı') // <-- EKLENDİ
+        }
     })
 }
 
@@ -120,9 +130,13 @@ export const useUpdatePropertyConfig = (databaseId: string) => {
                 body: JSON.stringify({ config: { options } })
             })
         },
-        onSuccess: () => queryClient.invalidateQueries({ queryKey: ['database', databaseId] })
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['database', databaseId] })
+            toast.success('Özellik ayarları güncellendi') // <-- EKLENDİ
+        }
     })
 }
+
 // --- VERİTABANI İKONU GÜNCELLEME ---
 export const useUpdateDatabaseIcon = (databaseId: string) => {
     const queryClient = useQueryClient()
@@ -136,13 +150,13 @@ export const useUpdateDatabaseIcon = (databaseId: string) => {
         },
         onSuccess: () => {
              queryClient.invalidateQueries({ queryKey: ['database', databaseId] })
-             // Sidebar'daki listeyi de güncellemek için global bir invalidate gerekebilir
-             // Ama şimdilik sayfa içi yeterli. Sidebar için:
              queryClient.invalidateQueries({ queryKey: ['databases'] }) 
+             toast.success('İkon güncellendi') // <-- EKLENDİ
         }
     })
 }
-// --- SAYFA İKONU GÜNCELLEME (Bunu en alta ekle) ---
+
+// --- SAYFA İKONU GÜNCELLEME ---
 export const useUpdatePageIcon = (pageId: string) => {
     const queryClient = useQueryClient()
     return useMutation({
@@ -157,6 +171,7 @@ export const useUpdatePageIcon = (pageId: string) => {
              queryClient.invalidateQueries({ queryKey: ['page', pageId] })
              queryClient.invalidateQueries({ queryKey: ['pages'] }) 
              queryClient.invalidateQueries({ queryKey: ['databases'] }) 
+             toast.success('Sayfa ikonu güncellendi') // <-- EKLENDİ
         }
     })
 }
