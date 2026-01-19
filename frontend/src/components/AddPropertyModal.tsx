@@ -1,6 +1,7 @@
 import { useState } from 'react'
-import { X, Type, List, CheckSquare, Calendar, Tag } from 'lucide-react'
-import toast from 'react-hot-toast' // <-- 1. TOAST IMPORT EDİLDİ
+import { X, Type, List, CheckSquare, Calendar, Tag, AlertCircle, BarChart3 } from 'lucide-react'
+import toast from 'react-hot-toast'
+import { useQueryClient } from '@tanstack/react-query' // <-- 1. EKLENDİ
 
 const TYPE_ICONS = {
   text: <Type size={16} />,
@@ -9,12 +10,14 @@ const TYPE_ICONS = {
   status: <CheckSquare size={16} />,
   date: <Calendar size={16} />,
   checkbox: <CheckSquare size={16} />,
+  priority: <BarChart3 size={16} />,
 }
 
 const PROPERTY_TYPES = [
   { type: 'text', name: 'Metin', description: 'Açıklama, notlar vb.' },
   { type: 'status', name: 'Durum', description: 'İlerleme durumu (To-do, Done)' },
-  { type: 'select', name: 'Öncelik (Seçim)', description: 'Tek bir seçenek (Örn: Yüksek, Orta)' },
+  { type: 'priority', name: 'Öncelik (Akıllı)', description: 'Sıralı 5 seviye (Çok Düşük -> Çok Yüksek)' },
+  { type: 'select', name: 'Seçim', description: 'Kategori, Departman gibi tekli seçimler' },
   { type: 'multi_select', name: '#Etiket (Çoklu)', description: 'Birden fazla etiket (Örn: #iş, #acil)' },
   { type: 'date', name: 'Tarih', description: 'Bitiş tarihi destekli takvim' },
   { type: 'checkbox', name: 'Onay Kutusu', description: 'Basit evet/hayır' },
@@ -30,27 +33,40 @@ export default function AddPropertyModal({ databaseId, onClose, onSuccess }: Add
   const [name, setName] = useState('')
   const [selectedType, setSelectedType] = useState('status') 
   const [isLoading, setIsLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   
-  // ESKİ "error" STATE'İ SİLİNDİ, ARTIK TOAST VAR
+  const queryClient = useQueryClient() // <-- 2. HOOK ÇAĞRILDI
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     
-    // VALIDATION (TOAST İLE)
     if (!name.trim()) {
-       toast.error("Lütfen bir özellik ismi giriniz.") // <-- HATA BİLDİRİMİ
+       setError("Lütfen bir özellik ismi giriniz.")
        return
     }
 
     setIsLoading(true)
+    setError(null)
 
     let initialConfig = {}
+
     if (selectedType === 'status') {
         initialConfig = {
             options: [
                 { id: crypto.randomUUID(), name: 'Başlanmadı', color: 'gray', group: 'To-do' },
                 { id: crypto.randomUUID(), name: 'Devam Ediyor', color: 'blue', group: 'In Progress' },
                 { id: crypto.randomUUID(), name: 'Tamamlandı', color: 'green', group: 'Complete' }
+            ]
+        }
+    }
+    else if (selectedType === 'priority') {
+        initialConfig = {
+            options: [
+                { id: crypto.randomUUID(), name: 'Çok Yüksek', color: 'red' },
+                { id: crypto.randomUUID(), name: 'Yüksek', color: 'orange' },
+                { id: crypto.randomUUID(), name: 'Orta', color: 'yellow' },
+                { id: crypto.randomUUID(), name: 'Düşük', color: 'blue' },
+                { id: crypto.randomUUID(), name: 'Çok Düşük', color: 'gray' }
             ]
         }
     }
@@ -71,14 +87,22 @@ export default function AddPropertyModal({ databaseId, onClose, onSuccess }: Add
       
       const data = await response.json()
       
-      toast.success(`${name} özelliği eklendi`) // <-- BAŞARI BİLDİRİMİ
+      // <-- 3. KRİTİK GÜNCELLEME: VERİTABANINI YENİLE -->
+      queryClient.invalidateQueries({ queryKey: ['database', databaseId] })
+      
+      toast.success(`${name} özelliği eklendi`)
       onSuccess(data)
       onClose()
     } catch (err: any) {
-      toast.error("Bir hata oluştu: " + err.message) // <-- SUNUCU HATASI
+      setError("Bir hata oluştu: " + err.message)
     } finally {
       setIsLoading(false)
     }
+  }
+
+  const handleNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+      setName(e.target.value)
+      if (error) setError(null)
   }
 
   return (
@@ -99,11 +123,16 @@ export default function AddPropertyModal({ databaseId, onClose, onSuccess }: Add
               autoFocus
               type="text" 
               value={name}
-              onChange={(e) => setName(e.target.value)}
-              className="w-full bg-[#151515] border border-[#373737] focus:border-blue-500 rounded p-2 text-white text-sm outline-none transition-colors"
+              onChange={handleNameChange}
+              className={`w-full bg-[#151515] border rounded p-2 text-white text-sm outline-none transition-colors ${error ? 'border-red-500 focus:border-red-500' : 'border-[#373737] focus:border-blue-500'}`}
               placeholder="Örn: Durum, Öncelik..."
             />
-            {/* ESKİ KIRMIZI HATA YAZISI KALDIRILDI */}
+            {error && (
+                <div className="flex items-center gap-1 mt-1 text-red-400 text-xs animate-in slide-in-from-top-1">
+                    <AlertCircle size={12} />
+                    <span>{error}</span>
+                </div>
+            )}
           </div>
 
           <div>

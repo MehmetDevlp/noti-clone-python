@@ -115,9 +115,13 @@ export default function StatusEditModal({
         <span className={`text-sm truncate ${isSelected(opt.id) ? 'text-blue-400 font-medium' : 'text-gray-300'}`}>{opt.name}</span>
         {isSelected(opt.id) && <Check size={14} className="text-blue-400 ml-auto" />}
       </div>
-      <button onClick={(e) => { e.stopPropagation(); onDelete(opt.id); }} className="opacity-0 group-hover:opacity-100 p-1 text-gray-600 hover:text-red-400 transition-all">
-        <Trash size={12} />
-      </button>
+      
+      {/* 1. KORUMA: Eğer 'priority' ise silme butonunu gösterme */}
+      {propType !== 'priority' && (
+          <button onClick={(e) => { e.stopPropagation(); onDelete(opt.id); }} className="opacity-0 group-hover:opacity-100 p-1 text-gray-600 hover:text-red-400 transition-all">
+            <Trash size={12} />
+          </button>
+      )}
     </div>
   )
 
@@ -166,8 +170,9 @@ export default function StatusEditModal({
               <div className="text-xs text-gray-500 text-center py-4 italic">Henüz seçenek yok.</div>
           )}
 
-          {/* --- OLUŞTURMA BÖLÜMÜ (HEM RENK SEÇİCİ HEM GRUP SEÇİCİ) --- */}
-          {search && !filteredOptions.some(o => o.name.toLowerCase() === search.toLowerCase()) && (
+          {/* --- OLUŞTURMA BÖLÜMÜ --- */}
+          {/* 2. KORUMA: Eğer 'priority' ise bu bölümü tamamen gizle */}
+          {propType !== 'priority' && search && !filteredOptions.some(o => o.name.toLowerCase() === search.toLowerCase()) && (
             <div className="mt-2 border-t border-[#373737]/50 pt-3 px-2">
                 
                 {/* 1. Renk Seçici (Her zaman görünür) */}

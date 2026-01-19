@@ -10,16 +10,15 @@ import {
   type ColumnFiltersState, 
   type RowSelectionState 
 } from '@tanstack/react-table'
-import { ArrowUpDown, Plus, Calendar, Edit2, Trash, ToggleRight, ToggleLeft } from 'lucide-react'
+import { ArrowUpDown, Plus, Edit2, Trash, ToggleRight, ToggleLeft } from 'lucide-react'
 import DatabaseToolbar from '../../components/DatabaseToolbar'
+import { getSortComparator, withNullHandling } from '../../utils/sortComparators'
 
-// --- TİPLER ---
 interface TableViewProps {
     databaseId: string
     properties: any[]
     pages: any[]
     pageValues: any
-    // Parent Fonksiyonlar
     onAddPage: () => void
     onOpenPage: (id: string) => void
     onUpdateTitle: (id: string, title: string) => void
@@ -28,12 +27,10 @@ interface TableViewProps {
     onRenameProperty: (id: string, name: string) => void
     onOpenStatusModal: (pageId: string, propId: string, propName: string, value: any, options: any[], type: string) => void
     onAddProperty: () => void
-    // Seçim Fonksiyonları (Parent yönetiyor)
     rowSelection: RowSelectionState
     setRowSelection: (val: any) => void
 }
 
-// Renk Yardımcıları
 const COLOR_MAP: Record<string, string> = {
   gray: 'bg-gray-500/20 text-gray-300',
   blue: 'bg-blue-500/20 text-blue-300',
@@ -51,7 +48,6 @@ const getBadgeStyle = (color: string) => {
     return { style: {}, className: `px-2 py-0.5 rounded text-xs ${COLOR_MAP[color] || COLOR_MAP.gray}` }
 }
 
-// --- TARİH SEÇİCİ BİLEŞENİ ---
 const DatePickerCell = ({ date, endDate, position, onUpdate, onClose }: { 
     date: string | null, 
     endDate: string | null, 
@@ -80,7 +76,6 @@ const DatePickerCell = ({ date, endDate, position, onUpdate, onClose }: {
         const finalDate = localDate ? localDate : null
         const finalEndDate = (hasEndDate && localEndDate) ? localEndDate : null
         
-        // HATA DÜZELTME NOKTASI: Burada null kontrolü yapıp gönderiyoruz
         onUpdate(finalDate, finalEndDate)
         onClose()
     }
@@ -124,7 +119,6 @@ const DatePickerCell = ({ date, endDate, position, onUpdate, onClose }: {
     )
 }
 
-// --- HEADER MENÜSÜ ---
 const PropertyHeader = ({ property, onRename, onDelete, icon }: any) => {
     const [isOpen, setIsOpen] = useState(false)
     const [isRenaming, setIsRenaming] = useState(false)
@@ -158,13 +152,25 @@ const PropertyHeader = ({ property, onRename, onDelete, icon }: any) => {
     )
 }
 
-export default function TableView({ databaseId, properties, pages, pageValues, onAddPage, onOpenPage, onUpdateTitle, onUpdateValue, onDeleteProperty, onRenameProperty, onOpenStatusModal, onAddProperty, rowSelection, setRowSelection }: TableViewProps) {
+export default function TableView({ 
+    properties, 
+    pages, 
+    pageValues, 
+    onAddPage, 
+    onOpenPage, 
+    onUpdateTitle, 
+    onUpdateValue, 
+    onDeleteProperty, 
+    onRenameProperty, 
+    onOpenStatusModal, 
+    onAddProperty, 
+    rowSelection, 
+    setRowSelection 
+}: TableViewProps) {
     const [sorting, setSorting] = useState<SortingState>([])
     const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
     const [editingCell, setEditingCell] = useState<{ pageId: string; field: 'title' | 'property'; propertyId?: string } | null>(null)
     const [editValue, setEditValue] = useState('')
-    
-    // Tarih seçici state'i
     const [activeDatePicker, setActiveDatePicker] = useState<{ pageId: string, propertyId: string, date: string | null, endDate: string | null, position: { x: number, y: number } } | null>(null)
 
     const columns = useMemo<ColumnDef<any>[]>(() => {
@@ -191,13 +197,16 @@ export default function TableView({ databaseId, properties, pages, pageValues, o
             if(prop.type === 'multi_select') icon = <span className="text-[10px] text-gray-500">☰</span>
             if(prop.type === 'date') icon = <span className="text-[10px] text-gray-500">📅</span>
             if(prop.type === 'checkbox') icon = <span className="text-[10px] text-gray-500">☑</span>
+            // YENİ: Öncelik ikonu
+            if(prop.type === 'priority') icon = <span className="text-[10px] text-gray-500">📊</span>
       
             cols.push({
               id: prop.id,
               accessorFn: (row) => {
                   const val = pageValues[row.id]?.[prop.id]
                   if (!val) return ''
-                  if (prop.type === 'select' || prop.type === 'status') return prop.config?.options?.find((o: any) => o.id === val.option_id)?.name || ''
+                  // YENİ: Priority tipini de Select gibi ele al
+                  if (prop.type === 'select' || prop.type === 'status' || prop.type === 'priority') return prop.config?.options?.find((o: any) => o.id === val.option_id)?.name || ''
                   if (prop.type === 'multi_select') {
                       const ids = val.option_ids || []
                       return ids.map((id: string) => prop.config?.options?.find((o: any) => o.id === id)?.name).join(', ')
@@ -206,12 +215,33 @@ export default function TableView({ databaseId, properties, pages, pageValues, o
                   if (prop.type === 'date') return val.date || ''
                   return ''
               },
+              
+              // --- SIRALAMA KODU (AYNI KALDI) ---
+              sortingFn: (rowA, rowB, columnId) => {
+                  const rawA = pageValues[rowA.original.id]?.[columnId]
+                  const rawB = pageValues[rowB.original.id]?.[columnId]
+                  
+                  let a = rawA
+                  let b = rawB
+                  
+                  if (prop.type === 'text') { a = rawA?.text; b = rawB?.text }
+                  else if (prop.type === 'date') { a = rawA?.date; b = rawB?.date }
+                  else if (prop.type === 'checkbox') { a = rawA?.checked; b = rawB?.checked }
+                  
+                  const comparator = getSortComparator(prop.type, prop.config)
+                  const withNulls = withNullHandling(comparator)
+                  
+                  return withNulls(a, b) 
+              },
+              // --------------------------------
+
               header: () => <PropertyHeader property={prop} onDelete={onDeleteProperty} onRename={onRenameProperty} icon={icon} />,
               cell: ({ row }) => {
                 const value = pageValues[row.original.id]?.[prop.id]
                 const isEditing = editingCell?.pageId === row.original.id && editingCell?.field === 'property' && editingCell?.propertyId === prop.id
       
-                if (prop.type === 'select' || prop.type === 'status' || prop.type === 'multi_select') {
+                // YENİ: Priority tipini de buraya dahil ettik
+                if (prop.type === 'select' || prop.type === 'status' || prop.type === 'multi_select' || prop.type === 'priority') {
                     const options = prop.config?.options || []
                     let selectedValue: any = null
                     if(prop.type === 'multi_select') {
@@ -276,7 +306,6 @@ export default function TableView({ databaseId, properties, pages, pageValues, o
                                     endDate={activeDatePicker.endDate} 
                                     position={activeDatePicker.position}
                                     onClose={() => setActiveDatePicker(null)}
-                                    // GÜNCELLENEN KISIM: onUpdate prop'u artık doğru fonksiyonu çağırıyor
                                     onUpdate={(d, ed) => onUpdateValue(row.original.id, prop.id, { date: d, end_date: ed })}
                                 />
                             )}
