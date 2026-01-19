@@ -1,83 +1,56 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import Modal from '../components/Modal' // YENİ: Modal'ı import ettik
-
-interface Database {
-  id: string
-  title: string
-  icon: string | null
-  created_at: number
-}
+import Modal from '../components/Modal'
+import { useDatabases, useCreateDatabase } from '../hooks/useDatabases' // YENİ: Hook'ları çağırdık
 
 export default function HomePage() {
-  const [databases, setDatabases] = useState<Database[]>([])
-  const [loading, setLoading] = useState(true)
   const navigate = useNavigate()
+  
+  // --- YENİ: React Query Hook'ları ---
+  // Loading, data, error... hepsi tek satırda!
+  const { data: databases, isLoading, isError } = useDatabases()
+  const createDatabaseMutation = useCreateDatabase()
 
-  // --- MODAL STATE'LERİ ---
+  // --- STATE ---
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [newDbTitle, setNewDbTitle] = useState("")
 
-  useEffect(() => {
-    fetch('http://localhost:8000/databases')
-      .then(res => res.json())
-      .then(data => {
-        setDatabases(data)
-        setLoading(false)
-      })
-      .catch(err => {
-        console.error('API Error:', err)
-        setLoading(false)
-      })
-  }, [])
-
-  // YENİ: Veritabanı Kaydetme Fonksiyonu (Modal'dan tetiklenir)
-  const submitCreateDatabase = async () => {
+  // --- FONKSİYONLAR ---
+  const handleSubmit = async () => {
     if (!newDbTitle.trim()) return
-
-    try {
-      const response = await fetch('http://localhost:8000/databases', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          title: newDbTitle,
-          icon: "📁" 
-        })
-      })
-
-      if (response.ok) {
-        const newDb = await response.json()
-        setDatabases([...databases, newDb])
-        
-        // Modalı kapat ve temizle
+    
+    // YENİ: Mutation kullanımı
+    createDatabaseMutation.mutate(newDbTitle, {
+      onSuccess: () => {
         setIsModalOpen(false)
         setNewDbTitle("")
-        
-        // İstersen direkt yönlendir:
-        // navigate(`/database/${newDb.id}`)
       }
-    } catch (err) {
-      console.error('Veritabanı oluşturulamadı:', err)
-    }
+    })
   }
 
-  if (loading) {
+  // --- RENDER (Yükleniyor ve Hata Durumları) ---
+  if (isLoading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-gray-500">Yükleniyor...</div>
+      <div className="flex items-center justify-center min-h-screen bg-[#191919] text-gray-500">
+        Yükleniyor...
+      </div>
+    )
+  }
+
+  if (isError) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-[#191919] text-red-500">
+        Veriler yüklenirken bir hata oluştu.
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen p-8 text-white">
+    <div className="min-h-screen p-8 text-white bg-[#191919]">
       <div className="max-w-4xl mx-auto">
+        {/* BAŞLIK VE BUTON */}
         <div className="flex items-center justify-between mb-8">
-          <h1 className="text-3xl font-bold">
-            📚 Veritabanlarım
-          </h1>
-          
-          {/* BUTON GÜNCELLENDİ: Artık Modalı açıyor */}
+          <h1 className="text-3xl font-bold">📚 Veritabanlarım</h1>
           <button
             onClick={() => setIsModalOpen(true)}
             className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-md font-medium transition-colors shadow-lg shadow-blue-900/20"
@@ -86,14 +59,15 @@ export default function HomePage() {
           </button>
         </div>
         
-        {databases.length === 0 ? (
+        {/* LİSTELEME */}
+        {databases?.length === 0 ? (
           <div className="text-gray-500 text-center py-12 border border-dashed border-[#373737] rounded-lg bg-[#202020]">
             Henüz hiç veritabanın yok. <br/>
             Yukarıdaki butona basarak ilkini oluştur!
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {databases.map(db => (
+            {databases?.map((db: any) => (
               <div
                 key={db.id}
                 onClick={() => navigate(`/database/${db.id}`)}
@@ -105,9 +79,8 @@ export default function HomePage() {
                     <h2 className="text-lg font-medium text-white group-hover:text-blue-400 transition-colors">
                       {db.title}
                     </h2>
-                    <p className="text-xs text-gray-500 mt-1">
-                      Oluşturulma: {new Date(db.created_at * 1000).toLocaleDateString('tr-TR')}
-                    </p>
+                    {/* Opsiyonel: Veritabanı ID'si veya tarihi */}
+                    <p className="text-xs text-gray-500 mt-1">ID: {db.id.slice(0, 8)}...</p>
                   </div>
                 </div>
               </div>
@@ -116,7 +89,7 @@ export default function HomePage() {
         )}
       </div>
 
-      {/* --- YENİ VERİTABANI OLUŞTURMA MODALI --- */}
+      {/* --- MODAL --- */}
       <Modal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
@@ -130,10 +103,11 @@ export default function HomePage() {
               İptal
             </button>
             <button 
-              onClick={submitCreateDatabase} 
-              className="px-3 py-1.5 text-sm bg-blue-600 hover:bg-blue-500 text-white rounded transition-colors font-medium"
+              onClick={handleSubmit} 
+              disabled={createDatabaseMutation.isPending} // Yüklenirken butonu kitle
+              className="px-3 py-1.5 text-sm bg-blue-600 hover:bg-blue-500 text-white rounded transition-colors font-medium disabled:opacity-50"
             >
-              Oluştur
+              {createDatabaseMutation.isPending ? 'Oluşturuluyor...' : 'Oluştur'}
             </button>
           </>
         }
@@ -145,8 +119,8 @@ export default function HomePage() {
             type="text" 
             value={newDbTitle}
             onChange={(e) => setNewDbTitle(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && submitCreateDatabase()}
-            placeholder="Örn: Projeler, Görevler..."
+            onKeyDown={(e) => e.key === 'Enter' && handleSubmit()}
+            placeholder="Örn: Müşteri Listesi, Görevler..."
             className="w-full bg-[#151515] border border-[#373737] rounded px-3 py-2 text-white outline-none focus:border-blue-500 transition-colors"
           />
         </div>

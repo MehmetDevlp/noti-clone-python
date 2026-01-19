@@ -4,6 +4,7 @@ import {
   ChevronsLeft, Menu, Plus, Search, Settings, Home, Trash
 } from 'lucide-react'
 import Modal from './Modal'
+import { useCommandStore } from '../store/useCommandStore' // 1. YENİ: Store'u ekledik
 
 interface SidebarProps {
   isOpen: boolean
@@ -21,18 +22,16 @@ export default function Sidebar({ isOpen, toggle }: SidebarProps) {
   const navigate = useNavigate()
   const location = useLocation()
   
+  // 2. YENİ: Menüyü açma fonksiyonunu çektik
+  const { setOpen } = useCommandStore() 
+
   const [databases, setDatabases] = useState<SidebarItem[]>([])
   const [pages, setPages] = useState<SidebarItem[]>([])
 
   // --- MODAL STATE'LERİ ---
-  // 1. Silme Modalı
   const [deleteTarget, setDeleteTarget] = useState<{id: string, type: 'database' | 'page'} | null>(null)
-  
-  // 2. Veritabanı Oluşturma Modalı
   const [isCreateDbOpen, setIsCreateDbOpen] = useState(false)
   const [newDbTitle, setNewDbTitle] = useState("")
-
-  // 3. YENİ: Sayfa Oluşturma Modalı
   const [isCreatePageOpen, setIsCreatePageOpen] = useState(false)
   const [newPageTitle, setNewPageTitle] = useState("")
 
@@ -61,7 +60,6 @@ export default function Sidebar({ isOpen, toggle }: SidebarProps) {
 
   // --- İŞLEM FONKSİYONLARI ---
 
-  // 1. Veritabanı Oluşturma
   const submitCreateDatabase = async () => {
     if (!newDbTitle.trim()) return
     try {
@@ -80,16 +78,11 @@ export default function Sidebar({ isOpen, toggle }: SidebarProps) {
     } catch (e) { console.error(e) }
   }
 
-  // 2. YENİ: Sayfa Oluşturma (Artık Modal Kullanıyor)
   const submitCreatePage = async () => {
-    // Başlık boş olsa bile oluşturulabilir (Opsiyonel: return koyarak zorunlu yapabilirsin)
-    // if (!newPageTitle.trim()) return 
-
     try {
       const res = await fetch('http://localhost:8000/pages', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        // Girilen başlığı gönderiyoruz. Boşsa backend boş kaydedecek.
         body: JSON.stringify({ title: newPageTitle, database_id: null })
       })
       if (res.ok) {
@@ -102,7 +95,6 @@ export default function Sidebar({ isOpen, toggle }: SidebarProps) {
     } catch (e) { console.error(e) }
   }
 
-  // 3. Silme İşlemi
   const confirmDelete = async () => {
     if (!deleteTarget) return
     const { id, type } = deleteTarget
@@ -143,9 +135,19 @@ export default function Sidebar({ isOpen, toggle }: SidebarProps) {
         </div>
 
         <div className="px-2 py-2 space-y-1">
-          <div className="flex items-center gap-2 px-3 py-1.5 text-sm text-gray-400 hover:bg-[#2C2C2C] hover:text-white rounded cursor-pointer">
-            <Search size={16} /> <span>Ara</span>
-          </div>
+          {/* 3. YENİ: ARA BUTONU GÜNCELLENDİ */}
+          <button 
+             onClick={() => setOpen(true)} // Tıklayınca menüyü aç
+             className="flex items-center gap-2 w-full px-3 py-1.5 hover:bg-[#2C2C2C] rounded text-sm text-gray-400 hover:text-white transition-colors cursor-pointer group text-left"
+          >
+            <Search size={16} /> 
+            <span>Ara</span>
+            {/* Kisayol Rozeti */}
+            <span className="ml-auto text-xs text-gray-500 border border-[#373737] rounded px-1.5 py-0.5 group-hover:border-gray-500 transition-colors">
+                Ctrl K
+            </span>
+          </button>
+
           <div className="flex items-center gap-2 px-3 py-1.5 text-sm text-gray-400 hover:bg-[#2C2C2C] hover:text-white rounded cursor-pointer">
             <Settings size={16} /> <span>Ayarlar</span>
           </div>
@@ -172,7 +174,6 @@ export default function Sidebar({ isOpen, toggle }: SidebarProps) {
           {/* SAYFALAR */}
           <div className="mt-6 mb-1 px-4 flex items-center justify-between group">
             <span className="text-xs font-bold text-gray-500">SAYFALAR</span>
-            {/* BURASI GÜNCELLENDİ: Modal açıyor */}
             <button onClick={() => setIsCreatePageOpen(true)} className="text-gray-500 hover:text-white opacity-0 group-hover:opacity-100 transition-opacity"><Plus size={14}/></button>
           </div>
           {pages.map(page => (
@@ -185,14 +186,13 @@ export default function Sidebar({ isOpen, toggle }: SidebarProps) {
         </div>
 
         <div className="p-2 border-t border-[#373737]">
-           {/* BURASI GÜNCELLENDİ: Modal açıyor */}
            <button onClick={() => setIsCreatePageOpen(true)} className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-gray-400 hover:bg-[#2C2C2C] hover:text-white rounded cursor-pointer transition-colors">
              <Plus size={16} /> <span>Yeni Sayfa Ekle</span>
            </button>
         </div>
       </div>
 
-      {/* --- MODALLAR --- */}
+      {/* --- MODALLAR (AYNI KALDI) --- */}
       
       {/* 1. SİLME ONAY PENCERESİ */}
       <Modal 
@@ -236,7 +236,7 @@ export default function Sidebar({ isOpen, toggle }: SidebarProps) {
         </div>
       </Modal>
 
-      {/* 3. YENİ SAYFA OLUŞTURMA PENCERESİ (YENİ EKLENDİ) */}
+      {/* 3. YENİ SAYFA OLUŞTURMA PENCERESİ */}
       <Modal
         isOpen={isCreatePageOpen}
         onClose={() => setIsCreatePageOpen(false)}
