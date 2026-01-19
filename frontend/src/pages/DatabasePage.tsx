@@ -1,6 +1,6 @@
-import { useState } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
-import { Table as TableIcon, KanbanSquare as LayoutKanban, Calendar as CalendarIcon, Trash, X } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
+import { Table as TableIcon, KanbanSquare as LayoutKanban, Calendar as CalendarIcon, Trash, X, Filter } from 'lucide-react'
 import CalendarView from '../components/views/CalendarView'
 import AddPropertyModal from '../components/AddPropertyModal'
 import IconPicker from '../components/IconPicker'
@@ -24,6 +24,9 @@ export default function DatabasePage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   
+  // URL PARAMETRELERİ
+  const [searchParams, setSearchParams] = useSearchParams()
+  
   // --- REACT QUERY ---
   const { data, isLoading, isError } = useDatabaseData(id!)
   
@@ -43,12 +46,17 @@ export default function DatabasePage() {
   const updateIconMutation = useUpdateDatabaseIcon(id!)
 
   // --- STATE ---
-  const [currentView, setCurrentView] = useState<'table' | 'board' | 'calendar'>('table')
+  const [currentView, setCurrentView] = useState<'table' | 'board' | 'calendar'>(
+      (searchParams.get('view') as 'table' | 'board' | 'calendar') || 'table'
+  )
+  
   const [rowSelection, setRowSelection] = useState({})
   const [showAddPropertyModal, setShowAddPropertyModal] = useState(false)
   const [activeStatusModal, setActiveStatusModal] = useState<any>(null)
   
-  // GÜNCELLENDİ: Hem tarih (Takvim) hem durum (Pano) tutabilen state
+  // FİLTRE STATE
+  const [showActiveOnly, setShowActiveOnly] = useState(false)
+
   const [createPageModal, setCreatePageModal] = useState<{ isOpen: boolean, dateStr: string | null, statusId: string | null }>({ 
       isOpen: false, 
       dateStr: null, 
@@ -56,22 +64,25 @@ export default function DatabasePage() {
   })
   const [newPageTitle, setNewPageTitle] = useState("")
 
+  // --- VIEW DEĞİŞTİRME ---
+  const handleViewChange = (view: 'table' | 'board' | 'calendar') => {
+      setCurrentView(view)
+      setSearchParams({ view })
+  }
+
   // --- FONKSİYONLAR ---
   
-  // GÜNCELLENDİ: Modal Açma Fonksiyonu
   const openCreateModal = (dateStr: string | null = null, statusId: string | null = null) => {
     setNewPageTitle("") 
     setCreatePageModal({ isOpen: true, dateStr, statusId })
   }
 
-  // GÜNCELLENDİ: Sayfa Oluşturma ve Verileri Atama
   const submitCreatePage = () => {
     const title = newPageTitle 
     const { dateStr, statusId } = createPageModal
 
     addPageMutation.mutate(title, {
         onSuccess: (newPage: any) => {
-            // 1. Eğer Takvimden geldiyse Tarihi ekle
             if (dateStr) {
                  const dateProp = properties.find((pr:any) => pr.type === 'date')
                  if(dateProp) {
@@ -82,7 +93,6 @@ export default function DatabasePage() {
                      })
                  }
             }
-            // 2. Eğer Panodan geldiyse Durumu (Sütunu) ekle
             if (statusId) {
                 const statusProp = properties.find((pr:any) => pr.type === 'status' || pr.type === 'select')
                 if(statusProp) {
@@ -130,14 +140,32 @@ export default function DatabasePage() {
             <h1 className="text-3xl font-bold">{database.title}</h1>
           </div>
 
-        {/* TABS */}
+        {/* TABS (SEKMELER) */}
         <div className="flex items-center gap-4 border-b border-[#373737] mb-4">
-            <button onClick={() => setCurrentView('table')} className={`flex items-center gap-2 pb-2 text-sm font-medium border-b-2 transition-colors ${currentView==='table'?'border-white text-white':'border-transparent text-gray-500 hover:text-gray-300'}`}><TableIcon size={16}/> Tablo</button>
-            <button onClick={() => setCurrentView('board')} className={`flex items-center gap-2 pb-2 text-sm font-medium border-b-2 transition-colors ${currentView==='board'?'border-white text-white':'border-transparent text-gray-500 hover:text-gray-300'}`}><LayoutKanban size={16}/> Pano</button>
-            <button onClick={() => setCurrentView('calendar')} className={`flex items-center gap-2 pb-2 text-sm font-medium border-b-2 transition-colors ${currentView==='calendar'?'border-white text-white':'border-transparent text-gray-500 hover:text-gray-300'}`}><CalendarIcon size={16}/> Takvim</button>
+            <button onClick={() => handleViewChange('table')} className={`flex items-center gap-2 pb-2 text-sm font-medium border-b-2 transition-colors ${currentView==='table'?'border-white text-white':'border-transparent text-gray-500 hover:text-gray-300'}`}><TableIcon size={16}/> Tablo</button>
+            <button onClick={() => handleViewChange('board')} className={`flex items-center gap-2 pb-2 text-sm font-medium border-b-2 transition-colors ${currentView==='board'?'border-white text-white':'border-transparent text-gray-500 hover:text-gray-300'}`}><LayoutKanban size={16}/> Pano</button>
+            <button onClick={() => handleViewChange('calendar')} className={`flex items-center gap-2 pb-2 text-sm font-medium border-b-2 transition-colors ${currentView==='calendar'?'border-white text-white':'border-transparent text-gray-500 hover:text-gray-300'}`}><CalendarIcon size={16}/> Takvim</button>
         </div>
 
-       {/* VIEW RENDERER */}
+        {/* --- YENİ ARAÇ ÇUBUĞU (TOOLBAR) --- */}
+        {/* Sadece Pano görünümündeyken ve sekmelerin altında çıkacak */}
+        {currentView === 'board' && (
+            <div className="flex items-center gap-2 mb-4 animate-in fade-in slide-in-from-top-2 duration-200">
+                <button 
+                    onClick={() => setShowActiveOnly(!showActiveOnly)}
+                    className={`flex items-center gap-2 text-xs px-3 py-1.5 rounded-full transition-all border ${
+                        showActiveOnly 
+                        ? 'bg-blue-500/20 text-blue-400 border-blue-500/50' 
+                        : 'bg-[#252525] text-gray-400 border-[#373737] hover:border-gray-500 hover:text-gray-300'
+                    }`}
+                >
+                    <Filter size={12} />
+                    {showActiveOnly ? 'Aktif Durumlar Gösteriliyor' : 'Filtrele: Sadece Aktif Olanlar'}
+                </button>
+            </div>
+        )}
+
+       {/* GÖRÜNÜMLER */}
         {currentView === 'table' && (
             <TableView 
                 databaseId={id!} 
@@ -163,11 +191,11 @@ export default function DatabasePage() {
                 properties={properties} 
                 pages={pages} 
                 pageValues={pageValues} 
-                // BURASI GÜNCELLENDİ: Artık direkt modal açıyor
                 onAddPage={(statusId) => openCreateModal(null, statusId)} 
                 onOpenPage={(pid) => navigate(`/page/${pid}`)}
                 onOpenStatusModal={(propId, propName, opts, type) => setActiveStatusModal({ pageId: '', propertyId: propId, propertyName: propName, currentValue: null, options: opts, propType: type, isOpen: true })}
                 onUpdateValue={(pid, propId, val) => updateValueMutation.mutate({ pageId: pid, propertyId: propId, value: val })}
+                hideEmptyGroups={showActiveOnly}
             />
         )}
 
@@ -202,8 +230,7 @@ export default function DatabasePage() {
             />
         )}
 
-        {/* --- SAYFA OLUŞTURMA MODALI (Hem Takvim Hem Pano İçin) --- */}
-          <Modal
+        <Modal
               isOpen={createPageModal.isOpen}
               onClose={() => setCreatePageModal({ isOpen: false, dateStr: null, statusId: null })}
               title="Yeni Sayfa Oluştur"

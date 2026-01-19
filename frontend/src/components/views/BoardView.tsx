@@ -30,6 +30,8 @@ interface BoardViewProps {
     onOpenPage: (pageId: string) => void
     onOpenStatusModal: (propId: string, propName: string, options: any[], propType: string) => void
     onUpdateValue: (pageId: string, propertyId: string, value: any) => void
+    // YENİ: Boş grupları gizle özelliği
+    hideEmptyGroups?: boolean
 }
 
 const getBadgeStyle = (color: string) => {
@@ -72,40 +74,34 @@ const SortableItem = ({ page, properties, pageValues, groupProperty, onOpenPage 
     )
 }
 
-export default function BoardView({ properties, pages, pageValues, onAddPage, onOpenPage, onOpenStatusModal, onUpdateValue }: BoardViewProps) {
+// GÜNCELLENDİ: hideEmptyGroups prop'u eklendi
+export default function BoardView({ properties, pages, pageValues, onAddPage, onOpenPage, onOpenStatusModal, onUpdateValue, hideEmptyGroups = false }: BoardViewProps) {
     const [activeId, setActiveId] = useState<string | null>(null)
     const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }), useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }))
     const groupProperty = properties.find(p => p.type === 'status') || properties.find(p => p.type === 'select')
 
-    // --- KESİNLEŞMİŞ VERİYE GÖRE SIRALAMA ---
+    // SIRALAMA MANTIĞI (Aynı kalıyor)
     const sortedOptions = useMemo(() => {
         if (!groupProperty) return []
         const rawOptions = groupProperty.config?.options || []
         
-        // Attığın konsol çıktısına göre birebir eşleşme:
         const groupOrder: Record<string, number> = {
-            'To-do': 1,         // Yapılacaklar (Başlanmadı, yapılcak vs.)
-            'In Progress': 2,   // Devam Edenler (Devam Ediyor, yapılıyor vs.)
-            'Complete': 3       // Tamamlananlar (Tamamlandı, bitti vs.)
+            'To-do': 1,
+            'In Progress': 2,
+            'Complete': 3
         }
 
         return [...rawOptions].sort((a: any, b: any) => {
-            // Veritabanından gelen 'group' değerine bakıyoruz
             const groupA = a.group || ''
             const groupB = b.group || ''
-
-            const scoreA = groupOrder[groupA] || 99 // Grup yoksa en sona at
+            const scoreA = groupOrder[groupA] || 99
             const scoreB = groupOrder[groupB] || 99
-
-            if (scoreA !== scoreB) {
-                return scoreA - scoreB
-            }
-            // Aynı gruptalarsa kendi içinde oluşturulma sırasını koru (veya isme göre diz)
+            if (scoreA !== scoreB) return scoreA - scoreB
             return 0 
         })
     }, [groupProperty])
-    // ----------------------------------------
 
+    // SÜTUNLARI HAZIRLAMA
     const columns = useMemo(() => {
         if (!groupProperty) return {}
         const cols: Record<string, any[]> = {}
@@ -141,18 +137,30 @@ export default function BoardView({ properties, pages, pageValues, onAddPage, on
     return (
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
             <div className="flex gap-4 overflow-x-auto p-4 h-[calc(100vh-200px)] items-start bg-[#191919]">
+                {/* 1. GRUPSUZ ALAN (Varsa) */}
                 {columns['uncategorized'] && columns['uncategorized'].length > 0 && (
                     <BoardColumn id="uncategorized" title="Grupsuz" items={columns['uncategorized']} count={columns['uncategorized'].length} color="default" onAddPage={() => onAddPage()} onOpenPage={onOpenPage} properties={properties} pageValues={pageValues} groupProperty={groupProperty} />
                 )}
                 
-                {/* SIRALANMIŞ SÜTUNLAR */}
-                {sortedOptions.map((opt: any) => (
-                    <BoardColumn 
-                        key={opt.id} id={opt.id} title={opt.name} items={columns[opt.id] || []} count={(columns[opt.id] || []).length} color={opt.color}
-                        // GÜNCELLENDİ: Modal açmak için ID gönderiyoruz
-                        onAddPage={() => onAddPage(opt.id)} onOpenPage={onOpenPage} properties={properties} pageValues={pageValues} groupProperty={groupProperty}
-                    />
-                ))}
+                {/* 2. ANA SÜTUNLAR */}
+                {sortedOptions.map((opt: any) => {
+                    const items = columns[opt.id] || []
+                    const count = items.length
+
+                    // --- YENİ EKLENEN FİLTRELEME ---
+                    // Eğer 'hideEmptyGroups' açıksa ve sütun boşsa, HİÇ RENDER ETME
+                    if (hideEmptyGroups && count === 0) {
+                        return null
+                    }
+                    // --------------------------------
+
+                    return (
+                        <BoardColumn 
+                            key={opt.id} id={opt.id} title={opt.name} items={items} count={count} color={opt.color}
+                            onAddPage={() => onAddPage(opt.id)} onOpenPage={onOpenPage} properties={properties} pageValues={pageValues} groupProperty={groupProperty}
+                        />
+                    )
+                })}
 
                 <div className="min-w-[120px] pt-2 shrink-0">
                     <button onClick={() => onOpenStatusModal(groupProperty.id, groupProperty.name, sortedOptions, groupProperty.type)} className="flex items-center justify-center gap-2 text-gray-400 hover:text-white text-sm px-4 hover:bg-[#2C2C2C] py-3 rounded-xl border border-dashed border-[#373737] transition-all font-medium w-full h-[60px]">
