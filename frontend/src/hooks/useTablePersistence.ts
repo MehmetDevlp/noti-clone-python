@@ -1,32 +1,35 @@
 import { useEffect, useState } from 'react'
-import type { SortingState, ColumnFiltersState } from '@tanstack/react-table'
+import type { SortingState, ColumnFiltersState, ColumnOrderState } from '@tanstack/react-table'
 
 export function useTablePersistence(databaseId: string) {
-  // LocalStorage anahtarı (Her veritabanı için benzersiz: table_state_123...)
   const storageKey = `table_state_${databaseId}`
 
-  // Başlangıç değerlerini LocalStorage'dan okuyarak belirle
   const [initialState, setInitialState] = useState<{
     sorting: SortingState,
-    filters: ColumnFiltersState
+    filters: ColumnFiltersState,
+    columnOrder: ColumnOrderState
   }>(() => {
     try {
       const saved = localStorage.getItem(storageKey)
       if (saved) {
-        return JSON.parse(saved)
+        const parsed = JSON.parse(saved)
+        // DÜZELTME BURADA: Eski veri varsa bile eksik parçaları tamamla
+        return {
+            sorting: parsed.sorting || [],
+            filters: parsed.filters || [],
+            columnOrder: parsed.columnOrder || [] // <-- Eğer undefined ise [] yap
+        }
       }
     } catch (e) {
       console.error("Ayarlar yüklenemedi", e)
     }
-    // Kayıt yoksa varsayılan boş döndür
-    return { sorting: [], filters: [] }
+    // Varsayılanlar
+    return { sorting: [], filters: [], columnOrder: [] }
   })
 
-  // Değişiklikleri Kaydetme Fonksiyonu
-  const saveState = (sorting: SortingState, filters: ColumnFiltersState) => {
-    // Sadece doluysa veya değiştiyse kaydetmek mantıklı ama
-    // boşaltıldıysa da (temizlendiyse) kaydetmeliyiz.
-    const data = JSON.stringify({ sorting, filters })
+  // Kaydetme Fonksiyonu
+  const saveState = (sorting: SortingState, filters: ColumnFiltersState, columnOrder: ColumnOrderState) => {
+    const data = JSON.stringify({ sorting, filters, columnOrder })
     localStorage.setItem(storageKey, data)
   }
 
