@@ -2,6 +2,7 @@
 React, TypeScript ve FastAPI kullanılarak geliştirilmiş; modern, hızlı ve tamamen kişiselleştirilebilir bir üretkenlik ve not alma uygulaması. Bu proje, blok tabanlı editör yapısı ve dinamik veritabanı özellikleri sunar.
 
 🚀 Özellikler
+Özellikler
 🗂️ Gelişmiş Veritabanı Yönetimi
 Dinamik Özellikler (Properties): Metin, Sayı, Seçim (Select), Çoklu Seçim (Multi-select), Durum (Status), Tarih, Öncelik ve Onay Kutusu gibi veri tipleri oluşturabilme.
 
@@ -88,8 +89,12 @@ cd PROJE_ADINIZ
 1. Backend Kurulumu (Sunucu)
 Terminali açın ve backend klasörüne gidin:
 
+Bash
+
 cd backend
 Sanal ortam (Virtual Environment) oluşturun ve aktif edin:
+
+Bash
 
 # Windows için:
 python -m venv venv
@@ -100,9 +105,12 @@ python3 -m venv venv
 source venv/bin/activate
 Gerekli kütüphaneleri yükleyin:
 
+Bash
 
 pip install -r requirements.txt
 Sunucuyu başlatın:
+
+Bash
 
 uvicorn main:app --reload
 Backend şu adreste çalışacaktır: http://localhost:8000
@@ -110,8 +118,12 @@ Backend şu adreste çalışacaktır: http://localhost:8000
 2. Frontend Kurulumu (Arayüz)
 Yeni bir terminal açın ve frontend klasörüne gidin:
 
+Bash
+
 cd frontend
 Gerekli paketleri yükleyin:
+
+Bash
 
 npm install
 Önemli: API bağlantısı için .env dosyasını oluşturun. frontend klasörü içindeyken:
@@ -120,9 +132,12 @@ npm install
 
 İçine şu satırı yapıştırın:
 
-VITE_API_URL=http://localhost:8000
+Kod snippet'i
 
+VITE_API_URL=http://localhost:8000
 Uygulamayı başlatın:
+
+Bash
 
 npm run dev
 Uygulama şu adreste çalışacaktır: http://localhost:5173 (veya terminalde belirtilen port)
