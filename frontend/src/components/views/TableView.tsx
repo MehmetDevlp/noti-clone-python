@@ -13,6 +13,8 @@ import {
 import { ArrowUpDown, Plus, Edit2, Trash, ToggleRight, ToggleLeft } from 'lucide-react'
 import DatabaseToolbar from '../../components/DatabaseToolbar'
 import { getSortComparator, withNullHandling } from '../../utils/sortComparators'
+import { evaluateFilter } from '../../utils/filterEvaluator'
+import { useTablePersistence } from '../../hooks/useTablePersistence' // <-- 1. YENİ IMPORT
 
 interface TableViewProps {
     databaseId: string
@@ -153,6 +155,7 @@ const PropertyHeader = ({ property, onRename, onDelete, icon }: any) => {
 }
 
 export default function TableView({ 
+    databaseId, // <-- Bunu hook'a göndereceğiz
     properties, 
     pages, 
     pageValues, 
@@ -167,8 +170,18 @@ export default function TableView({
     rowSelection, 
     setRowSelection 
 }: TableViewProps) {
-    const [sorting, setSorting] = useState<SortingState>([])
-    const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
+    // --- 2. PERSISTENCE HOOK ÇAĞRISI ---
+    const { initialState, saveState } = useTablePersistence(databaseId)
+
+    // State'leri başlangıç değerleri (LocalStorage) ile başlatıyoruz
+    const [sorting, setSorting] = useState<SortingState>(initialState.sorting)
+    const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>(initialState.filters)
+    
+    // --- 3. DEĞİŞİKLİKLERİ KAYDETME ---
+    useEffect(() => {
+        saveState(sorting, columnFilters)
+    }, [sorting, columnFilters, saveState])
+
     const [editingCell, setEditingCell] = useState<{ pageId: string; field: 'title' | 'property'; propertyId?: string } | null>(null)
     const [editValue, setEditValue] = useState('')
     const [activeDatePicker, setActiveDatePicker] = useState<{ pageId: string, propertyId: string, date: string | null, endDate: string | null, position: { x: number, y: number } } | null>(null)
@@ -182,7 +195,13 @@ export default function TableView({
                 size: 40, enableSorting: false,
             },
             {
-                id: 'title', accessorKey: 'title',
+                id: 'title', 
+                accessorKey: 'title',
+                filterFn: (row, columnId, filterValue) => {
+                    let filterRule = { operator: 'contains', value: '' }
+                    try { filterRule = JSON.parse(filterValue) } catch {}
+                    return evaluateFilter(row.original.title, filterRule as any, 'title')
+                },
                 header: ({ column }) => (<div className="flex items-center gap-1 group cursor-pointer hover:bg-[#373737] px-2 py-1 rounded w-full" onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}><span className="text-gray-500 text-xs">Aa</span><span className="text-sm font-medium text-gray-300">Başlık</span><ArrowUpDown size={12} className="text-gray-500 opacity-0 group-hover:opacity-100 ml-auto" /></div>),
                 cell: ({ row, getValue }) => {
                     const isEditing = editingCell?.pageId === row.original.id && editingCell?.field === 'title'
@@ -197,7 +216,6 @@ export default function TableView({
             if(prop.type === 'multi_select') icon = <span className="text-[10px] text-gray-500">☰</span>
             if(prop.type === 'date') icon = <span className="text-[10px] text-gray-500">📅</span>
             if(prop.type === 'checkbox') icon = <span className="text-[10px] text-gray-500">☑</span>
-            // YENİ: Öncelik ikonu
             if(prop.type === 'priority') icon = <span className="text-[10px] text-gray-500">📊</span>
       
             cols.push({
@@ -205,7 +223,6 @@ export default function TableView({
               accessorFn: (row) => {
                   const val = pageValues[row.id]?.[prop.id]
                   if (!val) return ''
-                  // YENİ: Priority tipini de Select gibi ele al
                   if (prop.type === 'select' || prop.type === 'status' || prop.type === 'priority') return prop.config?.options?.find((o: any) => o.id === val.option_id)?.name || ''
                   if (prop.type === 'multi_select') {
                       const ids = val.option_ids || []
@@ -215,32 +232,29 @@ export default function TableView({
                   if (prop.type === 'date') return val.date || ''
                   return ''
               },
-              
-              // --- SIRALAMA KODU (AYNI KALDI) ---
+              filterFn: (row, columnId, filterValue) => {
+                  let filterRule = { operator: 'contains', value: '' }
+                  try { filterRule = JSON.parse(filterValue) } catch {}
+                  const rawValue = pageValues[row.original.id]?.[columnId]
+                  return evaluateFilter(rawValue, filterRule as any, prop.type)
+              },
               sortingFn: (rowA, rowB, columnId) => {
                   const rawA = pageValues[rowA.original.id]?.[columnId]
                   const rawB = pageValues[rowB.original.id]?.[columnId]
-                  
                   let a = rawA
                   let b = rawB
-                  
                   if (prop.type === 'text') { a = rawA?.text; b = rawB?.text }
                   else if (prop.type === 'date') { a = rawA?.date; b = rawB?.date }
                   else if (prop.type === 'checkbox') { a = rawA?.checked; b = rawB?.checked }
-                  
                   const comparator = getSortComparator(prop.type, prop.config)
                   const withNulls = withNullHandling(comparator)
-                  
                   return withNulls(a, b) 
               },
-              // --------------------------------
-
               header: () => <PropertyHeader property={prop} onDelete={onDeleteProperty} onRename={onRenameProperty} icon={icon} />,
               cell: ({ row }) => {
                 const value = pageValues[row.original.id]?.[prop.id]
                 const isEditing = editingCell?.pageId === row.original.id && editingCell?.field === 'property' && editingCell?.propertyId === prop.id
       
-                // YENİ: Priority tipini de buraya dahil ettik
                 if (prop.type === 'select' || prop.type === 'status' || prop.type === 'multi_select' || prop.type === 'priority') {
                     const options = prop.config?.options || []
                     let selectedValue: any = null

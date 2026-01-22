@@ -1,8 +1,8 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { Table as TableIcon, KanbanSquare as LayoutKanban, Calendar as CalendarIcon, Trash, X, Filter } from 'lucide-react'
 import { z } from 'zod'
-import toast from 'react-hot-toast' // <-- YENİ IMPORT
+import toast from 'react-hot-toast'
 import CalendarView from '../components/views/CalendarView'
 import AddPropertyModal from '../components/AddPropertyModal'
 import IconPicker from '../components/IconPicker'
@@ -18,7 +18,8 @@ import {
     useDeleteProperty, 
     useRenameProperty, 
     useUpdatePropertyConfig ,
-    useUpdateDatabaseIcon
+    useUpdateDatabaseIcon,
+    useUpdateDatabaseTitle // <-- 1. YENİ HOOK IMPORT EDİLDİ
 } from '../hooks/apiHooks'
 import Modal from '../components/Modal'
 
@@ -49,6 +50,9 @@ export default function DatabasePage() {
   const renamePropertyMutation = useRenameProperty(id!)
   const updateConfigMutation = useUpdatePropertyConfig(id!)
   const updateIconMutation = useUpdateDatabaseIcon(id!)
+  
+  // 2. YENİ: BAŞLIK GÜNCELLEME MUTATION
+  const updateDbTitleMutation = useUpdateDatabaseTitle(id!)
 
   const [currentView, setCurrentView] = useState<'table' | 'board' | 'calendar'>(
       (searchParams.get('view') as 'table' | 'board' | 'calendar') || 'table'
@@ -67,40 +71,50 @@ export default function DatabasePage() {
   })
   
   const [newPageTitle, setNewPageTitle] = useState("")
-  // formError STATE'İNİ SİLDİK, ARTIK TOAST VAR
+
+  // 3. YENİ: BAŞLIK İÇİN LOCAL STATE
+  const [dbTitle, setDbTitle] = useState("")
+
+  // Veritabanı verisi gelince başlığı state'e at
+  useEffect(() => {
+      if (database?.title) {
+          setDbTitle(database.title)
+      }
+  }, [database])
 
   const handleViewChange = (view: 'table' | 'board' | 'calendar') => {
       setCurrentView(view)
       setSearchParams({ view })
   }
 
+  // 4. YENİ: BAŞLIK DEĞİŞİNCE KAYDET (ON BLUR)
+  const handleTitleBlur = () => {
+      if (database && dbTitle.trim() !== database.title) {
+          updateDbTitleMutation.mutate(dbTitle)
+      }
+  }
+
   const openCreateModal = (dateStr: string | null = null, statusId: string | null = null) => {
     setNewPageTitle("") 
-    // Hata temizlemeye gerek kalmadı
     setCreatePageModal({ isOpen: true, dateStr, statusId })
   }
 
   const submitCreatePage = () => {
-    // 1. Zod Kontrolü
     const result = createPageSchema.safeParse({ title: newPageTitle })
 
     if (!result.success) {
-        // HATA VARSA TOAST FIRLAT!
         toast.error(result.error.issues[0].message)
         return
     }
     
-    // 2. İşlem Başlıyor
     const title = newPageTitle 
     const { dateStr, statusId } = createPageModal
 
-    // Yükleniyor bildirimi (Opsiyonel ama şık durur)
     const toastId = toast.loading('Oluşturuluyor...')
 
     addPageMutation.mutate(title, {
         onSuccess: (newPage: any) => {
-            // BAŞARILI OLURSA
-            toast.success('Sayfa oluşturuldu!', { id: toastId }) // Loading'i silip Success yap
+            toast.success('Sayfa oluşturuldu!', { id: toastId })
 
             if (dateStr) {
                  const dateProp = properties.find((pr:any) => pr.type === 'date')
@@ -125,7 +139,6 @@ export default function DatabasePage() {
             setCreatePageModal({ isOpen: false, dateStr: null, statusId: null })
         },
         onError: () => {
-            // SUNUCU HATASI OLURSA
             toast.error('Bir hata oluştu, sayfa oluşturulamadı.', { id: toastId })
         }
     })
@@ -157,12 +170,21 @@ export default function DatabasePage() {
   return (
     <div className="min-h-screen p-8 bg-[#191919] text-white">
       <div className="max-w-[1400px] mx-auto">
-          <div className="flex items-center gap-3 mb-6">
+          <div className="flex items-center gap-3 mb-6 group">
             <IconPicker 
               icon={database.icon} 
               onChange={(newIcon) => updateIconMutation.mutate(newIcon)} 
             />
-            <h1 className="text-3xl font-bold">{database.title}</h1>
+            
+            {/* 5. GÜNCELLEME: H1 YERİNE INPUT */}
+            <input
+                type="text"
+                value={dbTitle}
+                onChange={(e) => setDbTitle(e.target.value)}
+                onBlur={handleTitleBlur}
+                className="text-3xl font-bold bg-transparent border-none outline-none text-white w-full placeholder-gray-600 focus:bg-[#252525] rounded px-2 transition-colors -ml-2"
+                placeholder="Veritabanı İsmi"
+            />
           </div>
 
         <div className="flex items-center gap-4 border-b border-[#373737] mb-4">
@@ -188,7 +210,8 @@ export default function DatabasePage() {
         )}
 
         {currentView === 'table' && (
-            <TableView 
+            <TableView
+                key={id}
                 databaseId={id!} 
                 properties={properties} 
                 pages={pages} 
@@ -286,7 +309,6 @@ export default function DatabasePage() {
                       placeholder="Örn: Toplantı, Görev..."
                       className="w-full bg-[#151515] border border-[#373737] rounded px-3 py-2 text-white outline-none focus:border-blue-500 transition-colors"
                   />
-                  {/* HATA MESAJI ALANI SİLİNDİ, TOAST VAR */}
               </div>
           </Modal>
 

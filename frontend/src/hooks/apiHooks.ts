@@ -175,3 +175,24 @@ export const useUpdatePageIcon = (pageId: string) => {
         }
     })
 }
+// --- EKLENEN KISIM: VERİTABANI BAŞLIĞI GÜNCELLEME ---
+export const useUpdateDatabaseTitle = (databaseId: string) => {
+    const queryClient = useQueryClient()
+    return useMutation({
+        mutationFn: async (title: string) => {
+            await fetch(`${API_URL}/databases/${databaseId}`, { 
+                method: 'PATCH', 
+                headers: {'Content-Type':'application/json'}, 
+                body: JSON.stringify({ title })
+            })
+        },
+        onSuccess: () => {
+             // 1. Veritabanı içindeki verileri tazele
+             queryClient.invalidateQueries({ queryKey: ['database', databaseId] })
+             // 2. Sidebar listesini tazele
+             queryClient.invalidateQueries({ queryKey: ['databases'] }) 
+             // 3. Sidebar bileşenine "Ben değiştim, kendini yenile" sinyali gönder
+             window.dispatchEvent(new Event('sidebar-update'))
+        }
+    })
+}
