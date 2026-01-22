@@ -196,3 +196,43 @@ export const useUpdateDatabaseTitle = (databaseId: string) => {
         }
     })
 }
+// --- YENİ: KAPAK RESMİ GÜNCELLEME ---
+export const useUpdatePageCover = (pageId: string) => {
+    const queryClient = useQueryClient()
+    return useMutation({
+        mutationFn: async (coverUrl: string | null) => {
+            // null gönderilirse kapak kaldırılır
+            await fetch(`${API_URL}/pages/${pageId}`, { 
+                method: 'PATCH', 
+                headers: {'Content-Type':'application/json'}, 
+                body: JSON.stringify({ cover: coverUrl })
+            })
+        },
+        onSuccess: () => {
+             queryClient.invalidateQueries({ queryKey: ['page', pageId] })
+        }
+    })
+}
+// --- YENİ: DOSYA YÜKLEME HOOK'U ---
+// Bir File objesi alır, sunucuya yükler ve dosyanın URL'sini döndürür.
+export const useUploadFile = () => {
+  return useMutation({
+    mutationFn: async (file: File) => {
+      const formData = new FormData()
+      formData.append('file', file)
+
+      const res = await fetch(`${API_URL}/upload`, {
+        method: 'POST',
+        // Content-Type: multipart/form-data header'ını tarayıcı otomatik ekler
+        body: formData, 
+      })
+
+      if (!res.ok) {
+        const errorData = await res.json()
+        throw new Error(errorData.detail || 'Yükleme başarısız')
+      }
+
+      return await res.json() // { url: "http://..." } döner
+    }
+  })
+}

@@ -1,15 +1,27 @@
-from fastapi import FastAPI, Depends, HTTPException
+from fastapi import FastAPI, Depends, HTTPException, File, UploadFile # <-- File, UploadFile eklendi
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles # <-- EKLENDİ
 from sqlalchemy.orm import Session
 import models
 import schemas
 import crud
 from database import engine, get_db
+import shutil # <-- EKLENDİ
+import os # <-- EKLENDİ
+import uuid # <-- EKLENDİ
 
 # Create tables
 models.Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="Notion Clone API", version="1.0.0")
+
+# --- YENİ: YÜKLEME DİZİNİ AYARLARI ---
+UPLOAD_DIR = "uploads"
+if not os.path.exists(UPLOAD_DIR):
+    os.makedirs(UPLOAD_DIR)
+
+# 'uploads' klasörünü statik olarak sun (http://localhost:8000/uploads/... erişimi için)
+app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
 
 app.add_middleware(
     CORSMiddleware,
@@ -42,6 +54,21 @@ def delete_database(database_id: str, db: Session = Depends(get_db)):
     if not success:
         raise HTTPException(status_code=404, detail="Database not found")
     return {"message": "Database deleted"}
+
+@app.patch("/databases/{database_id}")
+def update_database(database_id: str, update: schemas.DatabaseUpdate, db: Session = Depends(get_db)):
+    db_item = db.query(models.Database).filter(models.Database.id == database_id).first()
+    if not db_item:
+        raise HTTPException(status_code=404, detail="Database not found")
+    
+    if update.title is not None:
+        db_item.title = update.title
+    if update.icon is not None:
+        db_item.icon = update.icon
+        
+    db.commit()
+    db.refresh(db_item)
+    return db_item
 
 # ========== PROPERTY ENDPOINTS ==========
 
@@ -126,6 +153,12 @@ def get_value(page_id: str, property_id: str, db: Session = Depends(get_db)):
 def list_page_values(page_id: str, db: Session = Depends(get_db)):
     return crud.get_page_values(db, page_id)
 
+@app.get("/search")
+def search_items(q: str, db: Session = Depends(get_db)):
+    if not q:
+        return []
+    return crud.search_everything(db, q)
+
 @app.get("/")
 def root():
     return {"message": "Notion Clone API", "version": "1.0.0", "status": "running"}
@@ -134,23 +167,26 @@ def root():
 def health():
     return {"status": "healthy"}
 
-@app.patch("/databases/{database_id}")
-def update_database(database_id: str, update: schemas.DatabaseUpdate, db: Session = Depends(get_db)):
-    # Bak buraya 'schemas.' ekledik, sorun çözüldü!
-    db_item = db.query(models.Database).filter(models.Database.id == database_id).first()
-    if not db_item:
-        raise HTTPException(status_code=404, detail="Database not found")
-    
-    if update.title is not None:
-        db_item.title = update.title
-    if update.icon is not None:
-        db_item.icon = update.icon
-        
-    db.commit()
-    db.refresh(db_item)
-    return db_item
-@app.get("/search")
-def search_items(q: str, db: Session = Depends(get_db)):
-    if not q:
-        return []
-    return crud.search_everything(db, q)
+# ========== YENİ ENDPOINT: DOSYA YÜKLEME ==========
+@app.post("/upload")
+async def upload_file(file: UploadFile = File(...)):
+    # 1. Uzantı Kontrolü
+    allowed_types = ["image/jpeg", "image/png", "image/webp", "image/gif"]
+    if file.content_type not in allowed_types:
+        raise HTTPException(status_code=400, detail="Geçersiz dosya türü. Sadece Resim (JPG, PNG, WebP, GIF).")
+
+    # 2. Benzersiz isim oluştur
+    file_ext = file.filename.split(".")[-1]
+    unique_filename = f"{uuid.uuid4()}.{file_ext}"
+    file_path = os.path.join(UPLOAD_DIR, unique_filename)
+
+    # 3. Dosyayı kaydet
+    try:
+        with open(file_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Dosya kaydedilemedi: {str(e)}")
+
+    # 4. URL döndür
+    file_url = f"http://localhost:8000/uploads/{unique_filename}"
+    return {"url": file_url}
