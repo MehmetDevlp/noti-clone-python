@@ -1,7 +1,8 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 
-const API_URL = 'http://localhost:8000'
+// DÜZELTME: URL artık .env dosyasından okunuyor
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 
 // --- VERİ ÇEKME (FETCH) ---
 export const useDatabases = () => {
@@ -23,7 +24,6 @@ export const useCreateDatabase = () => {
     mutationFn: async (title: string) => {
       // 1. GÜVENLİK KONTROLÜ: İsim boş mu?
       if (!title || title.trim().length === 0) {
-          // Boşsa sunucuya gitme, direkt hata fırlat
           throw new Error("Veritabanı ismi boş bırakılamaz!")
       }
 
@@ -37,12 +37,14 @@ export const useCreateDatabase = () => {
       return res.json()
     },
     onSuccess: () => {
+      // Listeyi yenile
       queryClient.invalidateQueries({ queryKey: ['databases'] })
+      // Sidebar'ı tetikle
+      window.dispatchEvent(new Event('sidebar-update'))
       toast.success('Veritabanı oluşturuldu')
     },
-    // 2. HATA YAKALAMA: Yukarıdaki "throw new Error" buraya düşer
-    onError: (error: Error) => {
-      toast.error(error.message || 'Veritabanı oluşturulamadı')
+    onError: (error: any) => {
+        toast.error(error.message)
     }
   })
 }

@@ -1,11 +1,14 @@
 import { useState, useEffect } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { 
-  ChevronsLeft, Menu, Plus, Search, Settings, Home, Trash, Star // <-- Star EKLENDİ
+  ChevronsLeft, Menu, Plus, Search, Settings, Home, Trash, Star 
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import Modal from './Modal'
 import { useCommandStore } from '../store/useCommandStore'
+
+// API URL'i buradan alıyoruz
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 
 interface SidebarProps {
   isOpen: boolean
@@ -27,9 +30,8 @@ export default function Sidebar({ isOpen, toggle }: SidebarProps) {
 
   const [databases, setDatabases] = useState<SidebarItem[]>([])
   const [pages, setPages] = useState<SidebarItem[]>([])
-  const [favoriteIds, setFavoriteIds] = useState<string[]>([]) // <-- YENİ: Favori ID'leri
+  const [favoriteIds, setFavoriteIds] = useState<string[]>([])
 
-  // --- MODAL STATE'LERİ ---
   const [deleteTarget, setDeleteTarget] = useState<{id: string, type: 'database' | 'page'} | null>(null)
   const [isCreateDbOpen, setIsCreateDbOpen] = useState(false)
   const [newDbTitle, setNewDbTitle] = useState("")
@@ -39,8 +41,8 @@ export default function Sidebar({ isOpen, toggle }: SidebarProps) {
   const fetchData = async () => {
     try {
       const [dbsRes, pagesRes] = await Promise.all([
-        fetch('http://localhost:8000/databases'),
-        fetch('http://localhost:8000/pages')
+        fetch(`${API_URL}/databases`), // <-- DÜZELTİLDİ
+        fetch(`${API_URL}/pages`)      // <-- DÜZELTİLDİ
       ])
       
       if (dbsRes.ok && pagesRes.ok) {
@@ -52,7 +54,6 @@ export default function Sidebar({ isOpen, toggle }: SidebarProps) {
     } catch (err) { console.error(err) }
   }
 
-  // Favorileri LocalStorage'dan Çek
   const updateFavorites = () => {
       const favs = JSON.parse(localStorage.getItem('favorites') || '[]');
       setFavoriteIds(favs.map((f: any) => f.id));
@@ -60,21 +61,19 @@ export default function Sidebar({ isOpen, toggle }: SidebarProps) {
 
   useEffect(() => {
     fetchData()
-    updateFavorites() // İlk açılışta favorileri çek
+    updateFavorites()
 
     const handleUpdate = () => {
         fetchData()
-        updateFavorites() // Event gelince güncelle
+        updateFavorites()
     }
     
     window.addEventListener('sidebar-update', handleUpdate)
     return () => window.removeEventListener('sidebar-update', handleUpdate)
   }, [])
 
-  // --- İŞLEM FONKSİYONLARI ---
-
   const toggleFavorite = (e: React.MouseEvent, item: SidebarItem) => {
-      e.stopPropagation(); // Sayfaya gitmeyi engelle
+      e.stopPropagation();
       
       const favs = JSON.parse(localStorage.getItem('favorites') || '[]');
       const isFav = favs.some((f: any) => f.id === item.id);
@@ -84,13 +83,12 @@ export default function Sidebar({ isOpen, toggle }: SidebarProps) {
           newFavs = favs.filter((f: any) => f.id !== item.id);
           toast.success("Favorilerden çıkarıldı");
       } else {
-          // Tipine göre ekle
           newFavs = [{ id: item.id, title: item.title, icon: item.icon, type: item.type }, ...favs];
           toast.success("Favorilere eklendi");
       }
 
       localStorage.setItem('favorites', JSON.stringify(newFavs));
-      window.dispatchEvent(new Event('sidebar-update')); // Her yeri güncelle
+      window.dispatchEvent(new Event('sidebar-update'));
   }
 
   const submitCreateDatabase = async () => {
@@ -100,7 +98,7 @@ export default function Sidebar({ isOpen, toggle }: SidebarProps) {
     }
 
     try {
-      const res = await fetch('http://localhost:8000/databases', {
+      const res = await fetch(`${API_URL}/databases`, { // <-- DÜZELTİLDİ
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ title: newDbTitle, icon: '📁' })
@@ -126,7 +124,7 @@ export default function Sidebar({ isOpen, toggle }: SidebarProps) {
     }
 
     try {
-      const res = await fetch('http://localhost:8000/pages', {
+      const res = await fetch(`${API_URL}/pages`, { // <-- DÜZELTİLDİ
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ title: newPageTitle, database_id: null })
@@ -151,7 +149,7 @@ export default function Sidebar({ isOpen, toggle }: SidebarProps) {
     const endpoint = type === 'database' ? 'databases' : 'pages'
     
     try {
-        const res = await fetch(`http://localhost:8000/${endpoint}/${id}`, { method: 'DELETE' })
+        const res = await fetch(`${API_URL}/${endpoint}/${id}`, { method: 'DELETE' }) // <-- DÜZELTİLDİ
         if (res.ok) {
             window.dispatchEvent(new Event('sidebar-update'))
             if (location.pathname.includes(id)) navigate('/')
@@ -214,7 +212,6 @@ export default function Sidebar({ isOpen, toggle }: SidebarProps) {
               <span className="text-lg leading-none">{db.icon || '📁'}</span>
               <span className="truncate flex-1">{db.title}</span>
               
-              {/* --- ACTION BUTONLARI (FAVORİ + SİL) --- */}
               <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
                   <button 
                     onClick={(e) => toggleFavorite(e, db)} 
@@ -243,7 +240,6 @@ export default function Sidebar({ isOpen, toggle }: SidebarProps) {
               <span className="text-lg leading-none">{page.icon || '📄'}</span>
               <span className="truncate flex-1">{page.title || "İsimsiz"}</span>
               
-              {/* --- ACTION BUTONLARI (FAVORİ + SİL) --- */}
               <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
                   <button 
                     onClick={(e) => toggleFavorite(e, page)} 

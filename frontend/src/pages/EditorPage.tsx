@@ -10,6 +10,9 @@ import IconPicker from "../components/IconPicker";
 import CoverPicker from "../components/CoverPicker"; 
 import { useUpdatePageIcon, useUpdatePageCover } from "../hooks/apiHooks"; 
 
+// API URL
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+
 interface PageData {
   id: string;
   database_id: string | null; 
@@ -27,7 +30,6 @@ export default function EditorPage() {
   const [loading, setLoading] = useState(true);
   const [title, setTitle] = useState("");
   
-  // --- STATE: FAVORİ VE KAPAK ---
   const [isFavorite, setIsFavorite] = useState(false);
   const [showCoverPicker, setShowCoverPicker] = useState(false);
 
@@ -41,31 +43,28 @@ export default function EditorPage() {
 
     const loadData = async () => {
         try {
-            const res = await fetch(`http://localhost:8000/pages/${id}`);
+            const res = await fetch(`${API_URL}/pages/${id}`); // <-- DÜZELTİLDİ
             if (!res.ok) throw new Error("Page not found");
             const data = await res.json();
             
             setPage(data);
             setTitle(data.title || "");
 
-            // 1. FAVORİ KONTROLÜ
             const favorites = JSON.parse(localStorage.getItem('favorites') || '[]');
             setIsFavorite(favorites.some((p: any) => p.id === data.id));
 
-            // 2. GEÇMİŞE EKLE (GÜNCELLENDİ)
             const history = JSON.parse(localStorage.getItem('history') || '[]');
             const newEntry = { 
                 id: data.id, 
                 title: data.title || "İsimsiz", 
                 icon: data.icon, 
-                type: 'page', // <-- ÖNEMLİ: Bu bir sayfa
+                type: 'page',
                 visitedAt: Date.now() 
             };
             const filteredHistory = history.filter((h: any) => h.id !== data.id);
             filteredHistory.unshift(newEntry);
             localStorage.setItem('history', JSON.stringify(filteredHistory.slice(0, 10)));
             
-            // Editör içeriğini yükle
             if (data.content) {
                 try {
                     const blocks = JSON.parse(data.content);
@@ -100,7 +99,7 @@ export default function EditorPage() {
     saveTimeoutRef.current = window.setTimeout(async () => {
         if (!id) return;
         try {
-            const res = await fetch(`http://localhost:8000/pages/${id}`, {
+            const res = await fetch(`${API_URL}/pages/${id}`, { // <-- DÜZELTİLDİ
                 method: "PATCH",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
@@ -118,7 +117,7 @@ export default function EditorPage() {
   const handleTitleBlur = async () => {
     if (!id) return;
     try {
-      const res = await fetch(`http://localhost:8000/pages/${id}`, {
+      const res = await fetch(`${API_URL}/pages/${id}`, { // <-- DÜZELTİLDİ
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ title }),
@@ -133,7 +132,6 @@ export default function EditorPage() {
     }
   };
 
-  // --- FAVORİ EKLE/ÇIKAR FONKSİYONU ---
   const toggleFavorite = () => {
       if (!page) return;
       
@@ -141,16 +139,14 @@ export default function EditorPage() {
       let newFavorites;
 
       if (isFavorite) {
-          // Listeden çıkar
           newFavorites = favorites.filter((p: any) => p.id !== page.id);
           toast.success("Favorilerden çıkarıldı");
       } else {
-          // Listeye ekle (En başa)
           newFavorites = [{ 
               id: page.id, 
               title: title || "İsimsiz", 
               icon: page.icon,
-              type: 'page' // <-- Favoriye eklerken de tipini belirttik
+              type: 'page'
           }, ...favorites];
           toast.success("Favorilere eklendi");
       }
@@ -160,7 +156,6 @@ export default function EditorPage() {
       window.dispatchEvent(new Event('sidebar-update')); 
   };
 
-  // --- KAPAK İŞLEVLERİ ---
   const handleAddCover = () => {
       const defaultCover = "bg-gradient-to-r from-slate-700 to-slate-900";
       setPage(prev => prev ? { ...prev, cover: defaultCover } : null);
@@ -193,7 +188,6 @@ export default function EditorPage() {
   return (
     <div className="min-h-screen bg-[#191919] text-white pb-32">
       
-      {/* --- NAVİGASYON --- */}
       <div className="sticky top-0 z-40 bg-[#191919]/80 backdrop-blur-md border-b border-[#373737] px-4 py-3 flex items-center gap-2 text-sm text-gray-400">
         <button 
           onClick={() => page.database_id ? navigate(`/database/${page.database_id}`) : navigate('/')}
@@ -216,7 +210,6 @@ export default function EditorPage() {
         <span className="opacity-30">/</span>
         <span className="text-white truncate max-w-[200px] font-medium">{title || "İsimsiz"}</span>
 
-        {/* --- SAĞ ÜST KISIM (Kaydediliyor + Favori Butonu) --- */}
         <div className="ml-auto flex items-center gap-3">
             <span className="text-xs text-gray-600 transition-opacity duration-500" style={{opacity: saveTimeoutRef.current ? 1 : 0}}>
                 Kaydediliyor...
@@ -231,11 +224,9 @@ export default function EditorPage() {
         </div>
       </div>
 
-      {/* --- KAPAK GÖRSELİ ALANI --- */}
       <div className="group relative w-full">
           {page.cover ? (
               <div className="h-64 w-full relative animate-in fade-in duration-300">
-                  {/* KONTROL: Resim mi? Özel Gradient mi? Hazır Class mı? */}
                   {page.cover.startsWith('http') || page.cover.startsWith('data:') ? (
                       <img 
                         src={page.cover} 
@@ -244,14 +235,11 @@ export default function EditorPage() {
                         className="w-full h-full object-cover object-center" 
                       />
                   ) : page.cover.startsWith('linear-gradient') ? (
-                      // Özel gradient ise style ile verilir
                       <div className="w-full h-full" style={{ background: page.cover }}></div>
                   ) : (
-                      // Hazır preset ise class ile verilir
                       <div className={`w-full h-full ${page.cover}`}></div>
                   )}
                   
-                  {/* Kapak Değiştir Butonu */}
                   <div className="absolute bottom-4 right-12 opacity-0 group-hover:opacity-100 transition-opacity z-10">
                       <button 
                         onClick={() => setShowCoverPicker(true)}
@@ -260,7 +248,6 @@ export default function EditorPage() {
                           <ImageIcon size={14} /> Kapak Değiştir
                       </button>
                       
-                      {/* Picker Popup */}
                       {showCoverPicker && (
                           <CoverPicker 
                               currentCover={page.cover}
@@ -272,18 +259,14 @@ export default function EditorPage() {
                   </div>
               </div>
           ) : (
-              // Kapak yoksa boşluk bırakma (Notion stili)
               <div className="h-0 w-full"></div> 
           )}
       </div>
 
       <div className="max-w-4xl mx-auto px-12 relative group/header">
         
-        {/* --- İKON VE KÜÇÜK BUTONLAR --- */}
-        {/* Kapak varsa yukarı çek (-mt-16), yoksa aşağı it (mt-12) */}
         <div className={`relative z-20 flex flex-col items-start transition-all duration-300 ${page.cover ? '-mt-16' : 'mt-12'}`}>
              
-             {/* Kapak Yoksa 'Kapak Ekle' Butonları */}
              {!page.cover && (
                  <div className="flex items-center gap-1 mb-4 opacity-0 group-hover/header:opacity-100 transition-opacity pl-1">
                      <button onClick={handleAddCover} className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-white hover:bg-[#2C2C2C] px-2 py-1 rounded transition-colors">
@@ -303,7 +286,6 @@ export default function EditorPage() {
              </div>
         </div>
 
-        {/* --- BAŞLIK ALANI --- */}
         <div className="mb-6 group relative">
           {!title && <div className="absolute top-0 left-0 text-4xl font-bold text-gray-600 pointer-events-none">İsimsiz</div>}
           
@@ -316,7 +298,6 @@ export default function EditorPage() {
           />
         </div>
 
-        {/* --- METADATA --- */}
         <div className="flex items-center gap-6 text-gray-500 text-xs mb-8 border-b border-[#373737] pb-4">
            <span className="flex items-center gap-1">
              🕒 {formatDate(page.created_at)}
@@ -328,7 +309,6 @@ export default function EditorPage() {
            )}
         </div>
 
-        {/* --- NOTION EDİTÖRÜ --- */}
         <div className="-ml-14 text-gray-200 editor-wrapper">
             <BlockNoteView
                 editor={editor}

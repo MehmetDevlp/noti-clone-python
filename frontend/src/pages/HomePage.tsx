@@ -4,26 +4,25 @@ import { Database, FileText, Clock, Star, Plus, Sun, Moon, X, Trash } from 'luci
 import toast from 'react-hot-toast'
 import Modal from '../components/Modal'
 
+// API URL
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+
 export default function HomePage() {
   const navigate = useNavigate()
   
-  // Veri State'leri
   const [databases, setDatabases] = useState<any[]>([])
   const [pages, setPages] = useState<any[]>([])
   const [recentItems, setRecentItems] = useState<any[]>([]) 
   const [favorites, setFavorites] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
 
-  // Modal State'leri
   const [isCreateDbOpen, setIsCreateDbOpen] = useState(false)
   const [newDbTitle, setNewDbTitle] = useState("")
   const [isCreatePageOpen, setIsCreatePageOpen] = useState(false)
   const [newPageTitle, setNewPageTitle] = useState("")
   
-  // Silme Onay Modalı için State
   const [deleteTarget, setDeleteTarget] = useState<{id: string, type: 'database' | 'page'} | null>(null)
 
-  // 1. DİNAMİK SELAMLAMA
   const getGreeting = () => {
       const hour = new Date().getHours();
       if (hour >= 5 && hour < 12) return { text: "Günaydın", icon: "🌅" };
@@ -35,8 +34,8 @@ export default function HomePage() {
   const fetchData = async () => {
     try {
       const [dbsRes, pagesRes] = await Promise.all([
-          fetch('http://localhost:8000/databases'),
-          fetch('http://localhost:8000/pages')
+          fetch(`${API_URL}/databases`), // <-- DÜZELTİLDİ
+          fetch(`${API_URL}/pages`)      // <-- DÜZELTİLDİ
       ])
       
       const dbsData = await dbsRes.json()
@@ -45,30 +44,25 @@ export default function HomePage() {
       setDatabases(dbsData)
       setPages(pageData)
 
-      // --- TEMİZLİK OPERASYONU (Hayalet Verileri Sil) ---
-      // Mevcut ID'leri bir Set içinde topla (Hızlı kontrol için)
+      // --- TEMİZLİK OPERASYONU ---
       const validDbIds = new Set(dbsData.map((d: any) => d.id));
       const validPageIds = new Set(pageData.map((p: any) => p.id));
 
-      // 1. Geçmişi Temizle
       let history = JSON.parse(localStorage.getItem('history') || '[]');
       const cleanHistory = history.filter((item: any) => {
           if (item.type === 'database') return validDbIds.has(item.id);
           if (item.type === 'page') return validPageIds.has(item.id);
-          return false; // Tipi belirsizse sil
+          return false;
       });
-      // Değişiklik varsa güncelle
       if (history.length !== cleanHistory.length) {
           localStorage.setItem('history', JSON.stringify(cleanHistory));
       }
       setRecentItems(cleanHistory);
 
-      // 2. Favorileri Temizle
       let favs = JSON.parse(localStorage.getItem('favorites') || '[]');
       const cleanFavs = favs.filter((item: any) => {
           if (item.type === 'database') return validDbIds.has(item.id);
           if (item.type === 'page') return validPageIds.has(item.id);
-          // Eski versiyonlarda type olmayabilir, sayfa varsayalım ve kontrol edelim
           if (!item.type) return validPageIds.has(item.id); 
           return false;
       });
@@ -90,9 +84,6 @@ export default function HomePage() {
     return () => window.removeEventListener('sidebar-update', fetchData);
   }, [])
 
-  // --- İŞLEM FONKSİYONLARI ---
-
-  // Son Ziyaretlerden Kaldır (Sadece listeden siler)
   const removeFromHistory = (e: React.MouseEvent, id: string) => {
       e.stopPropagation();
       const newHistory = recentItems.filter(item => item.id !== id);
@@ -101,27 +92,24 @@ export default function HomePage() {
       toast.success("Listeden kaldırıldı");
   }
 
-  // Favoriden Çıkar
   const removeFromFavorites = (e: React.MouseEvent, id: string) => {
       e.stopPropagation();
       const newFavs = favorites.filter(item => item.id !== id);
       setFavorites(newFavs);
       localStorage.setItem('favorites', JSON.stringify(newFavs));
-      window.dispatchEvent(new Event('sidebar-update')); // Sidebar'ı da güncelle
+      window.dispatchEvent(new Event('sidebar-update')); 
       toast.success("Favorilerden çıkarıldı");
   }
 
-  // Kalıcı Silme İşlemi (API Çağrısı)
   const confirmDelete = async () => {
       if (!deleteTarget) return;
       const { id, type } = deleteTarget;
       const endpoint = type === 'database' ? 'databases' : 'pages';
 
       try {
-          const res = await fetch(`http://localhost:8000/${endpoint}/${id}`, { method: 'DELETE' });
+          const res = await fetch(`${API_URL}/${endpoint}/${id}`, { method: 'DELETE' }); // <-- DÜZELTİLDİ
           if (res.ok) {
               toast.success("Öğe kalıcı olarak silindi");
-              // Listeleri güncelle (useEffect içindeki temizlik mantığı sayesinde favori ve geçmişten de silinecek)
               fetchData(); 
               window.dispatchEvent(new Event('sidebar-update'));
           } else {
@@ -141,7 +129,7 @@ export default function HomePage() {
         return
     }
     try {
-      const res = await fetch('http://localhost:8000/databases', {
+      const res = await fetch(`${API_URL}/databases`, { // <-- DÜZELTİLDİ
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ title: newDbTitle, icon: '📁' })
@@ -163,7 +151,7 @@ export default function HomePage() {
         return
     }
     try {
-      const res = await fetch('http://localhost:8000/pages', {
+      const res = await fetch(`${API_URL}/pages`, { // <-- DÜZELTİLDİ
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ title: newPageTitle, database_id: null })
@@ -184,7 +172,7 @@ export default function HomePage() {
   return (
     <div className="p-10 max-w-6xl mx-auto text-white pb-32 animate-in fade-in duration-500">
       
-      {/* --- HEADER --- */}
+      {/* HEADER */}
       <div className="mb-8">
         <h1 className="text-3xl font-bold mb-2 flex items-center gap-3">
             <span className="text-4xl">{greeting.icon}</span> {greeting.text}
@@ -192,7 +180,7 @@ export default function HomePage() {
         <p className="text-gray-400">Çalışmaların seni bekliyor.</p>
       </div>
 
-      {/* --- FAVORİLER --- */}
+      {/* FAVORİLER */}
       {favorites.length > 0 && (
           <>
             <div className="mb-8">
@@ -209,7 +197,6 @@ export default function HomePage() {
                             <span className="text-xl">{fav.icon || (fav.type === 'database' ? "📁" : "📄")}</span>
                             <span className="font-medium truncate flex-1">{fav.title || "İsimsiz"}</span>
                             
-                            {/* HOVER BUTONLARI (FAVORİ SİL + KALICI SİL) */}
                             <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity bg-[#2C2C2C] p-1 rounded-md shadow-sm">
                                 <button 
                                     onClick={(e) => removeFromFavorites(e, fav.id)}
@@ -234,7 +221,7 @@ export default function HomePage() {
           </>
       )}
 
-      {/* --- SON ZİYARET EDİLENLER --- */}
+      {/* SON ZİYARET EDİLENLER */}
       <div className="mb-8">
         <h2 className="text-xs font-bold text-gray-500 uppercase mb-4 flex items-center gap-2">
             <Clock size={14} /> Son Ziyaret Edilenler
@@ -247,7 +234,6 @@ export default function HomePage() {
                         onClick={() => navigate(item.type === 'database' ? `/database/${item.id}` : `/page/${item.id}`)}
                         className="min-w-[160px] w-[160px] bg-[#202020] hover:bg-[#2C2C2C] border border-[#373737] p-4 rounded-xl cursor-pointer transition-all flex flex-col gap-2 group hover:border-gray-500 relative"
                     >
-                        {/* LİSTEDEN KALDIR BUTONU (X) */}
                         <button 
                             onClick={(e) => removeFromHistory(e, item.id)}
                             className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 text-gray-500 hover:text-white transition-opacity p-1 hover:bg-[#373737] rounded-full"
@@ -276,7 +262,7 @@ export default function HomePage() {
 
       <div className="w-full h-px bg-[#373737] my-8"></div>
 
-      {/* --- TÜM İÇERİKLER --- */}
+      {/* TÜM İÇERİKLER */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
           
           {/* VERİTABANLARI LİSTESİ */}
@@ -305,7 +291,6 @@ export default function HomePage() {
                             <span className="text-[10px] text-gray-600 truncate">ID: {db.id.slice(0,8)}...</span>
                         </div>
                         
-                        {/* LİSTEDE SİLME BUTONU */}
                         <button 
                             onClick={(e) => { e.stopPropagation(); setDeleteTarget({id: db.id, type: 'database'}) }}
                             className="opacity-0 group-hover:opacity-100 text-gray-500 hover:text-red-400 p-2 hover:bg-[#373737] rounded transition-all"
@@ -346,7 +331,6 @@ export default function HomePage() {
                             <span className="text-[10px] text-gray-600 truncate">ID: {page.id.slice(0,8)}...</span>
                         </div>
 
-                        {/* LİSTEDE SİLME BUTONU */}
                         <button 
                             onClick={(e) => { e.stopPropagation(); setDeleteTarget({id: page.id, type: 'page'}) }}
                             className="opacity-0 group-hover:opacity-100 text-gray-500 hover:text-red-400 p-2 hover:bg-[#373737] rounded transition-all"
@@ -362,7 +346,6 @@ export default function HomePage() {
           </div>
       </div>
 
-      {/* --- OLUŞTURMA MODALLARI --- */}
       <Modal
         isOpen={isCreateDbOpen}
         onClose={() => setIsCreateDbOpen(false)}
@@ -414,7 +397,6 @@ export default function HomePage() {
         </div>
       </Modal>
 
-      {/* --- SİLME ONAY MODALI --- */}
       <Modal 
         isOpen={!!deleteTarget} 
         onClose={() => setDeleteTarget(null)} 

@@ -4,6 +4,7 @@ import { Command } from 'cmdk'
 import { Search, Home, Plus, FileText } from 'lucide-react'
 import { useDatabases } from '../hooks/useDatabases'
 import { useCommandStore } from '../store/useCommandStore'
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 
 export default function CommandMenu() {
   const navigate = useNavigate()
