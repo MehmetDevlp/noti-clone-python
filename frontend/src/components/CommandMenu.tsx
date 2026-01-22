@@ -36,7 +36,7 @@ export default function CommandMenu() {
   useEffect(() => {
     if (isOpen) {
         // Menü açılınca kök sayfaları (veritabanına bağlı olmayanları) çek
-        fetch('http://localhost:8000/pages')
+        fetch(`${API_URL}/pages`)
             .then(res => res.json())
             .then(data => setRootPages(data))
             .catch(err => console.error("Sayfalar yüklenemedi:", err))
