@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
+// DÜZELTME: Hatalı aliaslar (CalendarIconSmall, KanbanIconSmall) kaldırıldı.
 import { Table as TableIcon, KanbanSquare as LayoutKanban, Calendar as CalendarIcon, Trash, X, Filter } from 'lucide-react'
 import { z } from 'zod'
 import toast from 'react-hot-toast'
@@ -19,7 +20,7 @@ import {
     useRenameProperty, 
     useUpdatePropertyConfig ,
     useUpdateDatabaseIcon,
-    useUpdateDatabaseTitle // <-- 1. YENİ HOOK IMPORT EDİLDİ
+    useUpdateDatabaseTitle
 } from '../hooks/apiHooks'
 import Modal from '../components/Modal'
 
@@ -50,8 +51,6 @@ export default function DatabasePage() {
   const renamePropertyMutation = useRenameProperty(id!)
   const updateConfigMutation = useUpdatePropertyConfig(id!)
   const updateIconMutation = useUpdateDatabaseIcon(id!)
-  
-  // 2. YENİ: BAŞLIK GÜNCELLEME MUTATION
   const updateDbTitleMutation = useUpdateDatabaseTitle(id!)
 
   const [currentView, setCurrentView] = useState<'table' | 'board' | 'calendar'>(
@@ -61,7 +60,6 @@ export default function DatabasePage() {
   const [rowSelection, setRowSelection] = useState({})
   const [showAddPropertyModal, setShowAddPropertyModal] = useState(false)
   const [activeStatusModal, setActiveStatusModal] = useState<any>(null)
-  
   const [showActiveOnly, setShowActiveOnly] = useState(false)
 
   const [createPageModal, setCreatePageModal] = useState<{ isOpen: boolean, dateStr: string | null, statusId: string | null }>({ 
@@ -71,14 +69,23 @@ export default function DatabasePage() {
   })
   
   const [newPageTitle, setNewPageTitle] = useState("")
-
-  // 3. YENİ: BAŞLIK İÇİN LOCAL STATE
   const [dbTitle, setDbTitle] = useState("")
 
-  // Veritabanı verisi gelince başlığı state'e at
   useEffect(() => {
-      if (database?.title) {
+      if (database) {
           setDbTitle(database.title)
+
+          const history = JSON.parse(localStorage.getItem('history') || '[]');
+          const newEntry = { 
+              id: database.id, 
+              title: database.title || "İsimsiz Veritabanı", 
+              icon: database.icon,
+              type: 'database',
+              visitedAt: Date.now() 
+          };
+          const filteredHistory = history.filter((h: any) => h.id !== database.id);
+          filteredHistory.unshift(newEntry);
+          localStorage.setItem('history', JSON.stringify(filteredHistory.slice(0, 10)));
       }
   }, [database])
 
@@ -87,7 +94,6 @@ export default function DatabasePage() {
       setSearchParams({ view })
   }
 
-  // 4. YENİ: BAŞLIK DEĞİŞİNCE KAYDET (ON BLUR)
   const handleTitleBlur = () => {
       if (database && dbTitle.trim() !== database.title) {
           updateDbTitleMutation.mutate(dbTitle)
@@ -176,7 +182,6 @@ export default function DatabasePage() {
               onChange={(newIcon) => updateIconMutation.mutate(newIcon)} 
             />
             
-            {/* 5. GÜNCELLEME: H1 YERİNE INPUT */}
             <input
                 type="text"
                 value={dbTitle}
@@ -286,12 +291,14 @@ export default function DatabasePage() {
               <div className="flex flex-col gap-2">
                   {createPageModal.dateStr && (
                       <div className="flex items-center gap-2 text-xs text-gray-500 mb-1">
+                          {/* DÜZELTME: Mevcut CalendarIcon kullanıldı */}
                           <CalendarIcon size={12}/>
                           <span>{createPageModal.dateStr} tarihine ekleniyor</span>
                       </div>
                   )}
                   {createPageModal.statusId && (
                       <div className="flex items-center gap-2 text-xs text-gray-500 mb-1">
+                          {/* DÜZELTME: Mevcut LayoutKanban kullanıldı */}
                           <LayoutKanban size={12}/>
                           <span>Seçili sütuna ekleniyor</span>
                       </div>

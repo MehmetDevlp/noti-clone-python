@@ -4,7 +4,7 @@ import "@blocknote/core/fonts/inter.css";
 import { useCreateBlockNote } from "@blocknote/react";
 import { BlockNoteView } from "@blocknote/mantine";
 import "@blocknote/mantine/style.css"; 
-import { Home, Database, ChevronLeft, Image as ImageIcon, Smile } from "lucide-react"; 
+import { Home, Database, ChevronLeft, Image as ImageIcon, Smile, Star } from "lucide-react"; 
 import toast from 'react-hot-toast'; 
 import IconPicker from "../components/IconPicker";
 import CoverPicker from "../components/CoverPicker"; 
@@ -27,7 +27,8 @@ export default function EditorPage() {
   const [loading, setLoading] = useState(true);
   const [title, setTitle] = useState("");
   
-  // --- STATE: KAPAK MENÜSÜ ---
+  // --- STATE: FAVORİ VE KAPAK ---
+  const [isFavorite, setIsFavorite] = useState(false);
   const [showCoverPicker, setShowCoverPicker] = useState(false);
 
   const updateIconMutation = useUpdatePageIcon(id!);
@@ -47,23 +48,37 @@ export default function EditorPage() {
             setPage(data);
             setTitle(data.title || "");
 
+            // 1. FAVORİ KONTROLÜ
+            const favorites = JSON.parse(localStorage.getItem('favorites') || '[]');
+            setIsFavorite(favorites.some((p: any) => p.id === data.id));
+
+            // 2. GEÇMİŞE EKLE (GÜNCELLENDİ)
+            const history = JSON.parse(localStorage.getItem('history') || '[]');
+            const newEntry = { 
+                id: data.id, 
+                title: data.title || "İsimsiz", 
+                icon: data.icon, 
+                type: 'page', // <-- ÖNEMLİ: Bu bir sayfa
+                visitedAt: Date.now() 
+            };
+            const filteredHistory = history.filter((h: any) => h.id !== data.id);
+            filteredHistory.unshift(newEntry);
+            localStorage.setItem('history', JSON.stringify(filteredHistory.slice(0, 10)));
+            
+            // Editör içeriğini yükle
             if (data.content) {
                 try {
                     const blocks = JSON.parse(data.content);
                     if (Array.isArray(blocks) && blocks.length > 0) {
                         editor.replaceBlocks(editor.document, blocks);
                     } else {
-                        editor.replaceBlocks(editor.document, [
-                            { type: "paragraph", content: [] }
-                        ]);
+                        editor.replaceBlocks(editor.document, [{ type: "paragraph", content: [] }]);
                     }
                 } catch (parseError) {
                     console.error("İçerik parse hatası:", parseError);
                 }
             } else {
-                editor.replaceBlocks(editor.document, [
-                    { type: "paragraph", content: [] }
-                ]);
+                editor.replaceBlocks(editor.document, [{ type: "paragraph", content: [] }]);
             }
 
         } catch (err) {
@@ -82,7 +97,7 @@ export default function EditorPage() {
   const handleEditorChange = () => {
     if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
 
-    saveTimeoutRef.current = setTimeout(async () => {
+    saveTimeoutRef.current = window.setTimeout(async () => {
         if (!id) return;
         try {
             const res = await fetch(`http://localhost:8000/pages/${id}`, {
@@ -95,7 +110,7 @@ export default function EditorPage() {
             if (!res.ok) throw new Error("Kayıt başarısız");
         } catch (err) {
             console.error("Kaydetme hatası:", err);
-            toast.error("Otomatik kayıt başarısız! İnternetinizi kontrol edin.");
+            toast.error("Otomatik kayıt başarısız!");
         }
     }, 1000);
   };
@@ -116,6 +131,33 @@ export default function EditorPage() {
       console.error("Başlık hatası:", err);
       toast.error("Başlık kaydedilemedi");
     }
+  };
+
+  // --- FAVORİ EKLE/ÇIKAR FONKSİYONU ---
+  const toggleFavorite = () => {
+      if (!page) return;
+      
+      const favorites = JSON.parse(localStorage.getItem('favorites') || '[]');
+      let newFavorites;
+
+      if (isFavorite) {
+          // Listeden çıkar
+          newFavorites = favorites.filter((p: any) => p.id !== page.id);
+          toast.success("Favorilerden çıkarıldı");
+      } else {
+          // Listeye ekle (En başa)
+          newFavorites = [{ 
+              id: page.id, 
+              title: title || "İsimsiz", 
+              icon: page.icon,
+              type: 'page' // <-- Favoriye eklerken de tipini belirttik
+          }, ...favorites];
+          toast.success("Favorilere eklendi");
+      }
+
+      localStorage.setItem('favorites', JSON.stringify(newFavorites));
+      setIsFavorite(!isFavorite);
+      window.dispatchEvent(new Event('sidebar-update')); 
   };
 
   // --- KAPAK İŞLEVLERİ ---
@@ -173,12 +215,23 @@ export default function EditorPage() {
 
         <span className="opacity-30">/</span>
         <span className="text-white truncate max-w-[200px] font-medium">{title || "İsimsiz"}</span>
-        <span className="ml-auto text-xs text-gray-600 transition-opacity duration-500" style={{opacity: saveTimeoutRef.current ? 1 : 0}}>
-            Kaydediliyor...
-        </span>
+
+        {/* --- SAĞ ÜST KISIM (Kaydediliyor + Favori Butonu) --- */}
+        <div className="ml-auto flex items-center gap-3">
+            <span className="text-xs text-gray-600 transition-opacity duration-500" style={{opacity: saveTimeoutRef.current ? 1 : 0}}>
+                Kaydediliyor...
+            </span>
+            <button 
+                onClick={toggleFavorite}
+                className={`p-1 rounded hover:bg-[#2C2C2C] transition-colors ${isFavorite ? 'text-yellow-400' : 'text-gray-500 hover:text-yellow-400'}`}
+                title={isFavorite ? "Favorilerden Çıkar" : "Favorilere Ekle"}
+            >
+                <Star size={18} fill={isFavorite ? "currentColor" : "none"} />
+            </button>
+        </div>
       </div>
 
-     {/* --- KAPAK GÖRSELİ ALANI --- */}
+      {/* --- KAPAK GÖRSELİ ALANI --- */}
       <div className="group relative w-full">
           {page.cover ? (
               <div className="h-64 w-full relative animate-in fade-in duration-300">
@@ -191,7 +244,7 @@ export default function EditorPage() {
                         className="w-full h-full object-cover object-center" 
                       />
                   ) : page.cover.startsWith('linear-gradient') ? (
-                      // YENİ: Özel gradient ise style ile verilir
+                      // Özel gradient ise style ile verilir
                       <div className="w-full h-full" style={{ background: page.cover }}></div>
                   ) : (
                       // Hazır preset ise class ile verilir
@@ -220,7 +273,6 @@ export default function EditorPage() {
               </div>
           ) : (
               // Kapak yoksa boşluk bırakma (Notion stili)
-              // Burayı h-0 veya küçük bir şey yapabiliriz ama boşluk iyidir
               <div className="h-0 w-full"></div> 
           )}
       </div>
@@ -228,7 +280,7 @@ export default function EditorPage() {
       <div className="max-w-4xl mx-auto px-12 relative group/header">
         
         {/* --- İKON VE KÜÇÜK BUTONLAR --- */}
-        {/* DÜZELTME BURADA: Kapak varsa yukarı çek (-mt-16), yoksa aşağı it (mt-12) */}
+        {/* Kapak varsa yukarı çek (-mt-16), yoksa aşağı it (mt-12) */}
         <div className={`relative z-20 flex flex-col items-start transition-all duration-300 ${page.cover ? '-mt-16' : 'mt-12'}`}>
              
              {/* Kapak Yoksa 'Kapak Ekle' Butonları */}

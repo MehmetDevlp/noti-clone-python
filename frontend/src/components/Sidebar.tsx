@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { 
-  ChevronsLeft, Menu, Plus, Search, Settings, Home, Trash
+  ChevronsLeft, Menu, Plus, Search, Settings, Home, Trash, Star // <-- Star EKLENDİ
 } from 'lucide-react'
-import toast from 'react-hot-toast' // <-- 1. TOAST EKLENDİ
+import toast from 'react-hot-toast'
 import Modal from './Modal'
 import { useCommandStore } from '../store/useCommandStore'
 
@@ -27,6 +27,7 @@ export default function Sidebar({ isOpen, toggle }: SidebarProps) {
 
   const [databases, setDatabases] = useState<SidebarItem[]>([])
   const [pages, setPages] = useState<SidebarItem[]>([])
+  const [favoriteIds, setFavoriteIds] = useState<string[]>([]) // <-- YENİ: Favori ID'leri
 
   // --- MODAL STATE'LERİ ---
   const [deleteTarget, setDeleteTarget] = useState<{id: string, type: 'database' | 'page'} | null>(null)
@@ -51,17 +52,48 @@ export default function Sidebar({ isOpen, toggle }: SidebarProps) {
     } catch (err) { console.error(err) }
   }
 
+  // Favorileri LocalStorage'dan Çek
+  const updateFavorites = () => {
+      const favs = JSON.parse(localStorage.getItem('favorites') || '[]');
+      setFavoriteIds(favs.map((f: any) => f.id));
+  }
+
   useEffect(() => {
     fetchData()
-    const handleUpdate = () => fetchData()
+    updateFavorites() // İlk açılışta favorileri çek
+
+    const handleUpdate = () => {
+        fetchData()
+        updateFavorites() // Event gelince güncelle
+    }
+    
     window.addEventListener('sidebar-update', handleUpdate)
     return () => window.removeEventListener('sidebar-update', handleUpdate)
   }, [])
 
   // --- İŞLEM FONKSİYONLARI ---
 
+  const toggleFavorite = (e: React.MouseEvent, item: SidebarItem) => {
+      e.stopPropagation(); // Sayfaya gitmeyi engelle
+      
+      const favs = JSON.parse(localStorage.getItem('favorites') || '[]');
+      const isFav = favs.some((f: any) => f.id === item.id);
+      let newFavs;
+
+      if (isFav) {
+          newFavs = favs.filter((f: any) => f.id !== item.id);
+          toast.success("Favorilerden çıkarıldı");
+      } else {
+          // Tipine göre ekle
+          newFavs = [{ id: item.id, title: item.title, icon: item.icon, type: item.type }, ...favs];
+          toast.success("Favorilere eklendi");
+      }
+
+      localStorage.setItem('favorites', JSON.stringify(newFavs));
+      window.dispatchEvent(new Event('sidebar-update')); // Her yeri güncelle
+  }
+
   const submitCreateDatabase = async () => {
-    // 1. GÜVENLİK VE BİLDİRİM
     if (!newDbTitle.trim()) {
         toast.error("Veritabanı ismi boş olamaz")
         return
@@ -76,10 +108,7 @@ export default function Sidebar({ isOpen, toggle }: SidebarProps) {
       if (res.ok) {
         const data = await res.json()
         navigate(`/database/${data.id}`)
-        
-        // GÜNCELLEME VE BİLDİRİM
-        fetchData()
-        window.dispatchEvent(new Event('sidebar-update')) // Diğer yerleri de güncelle
+        window.dispatchEvent(new Event('sidebar-update'))
         
         setIsCreateDbOpen(false)
         setNewDbTitle("")
@@ -87,14 +116,10 @@ export default function Sidebar({ isOpen, toggle }: SidebarProps) {
       } else {
         toast.error("Oluşturulurken hata oluştu")
       }
-    } catch (e) { 
-        console.error(e)
-        toast.error("Sunucu hatası")
-    }
+    } catch (e) { console.error(e); toast.error("Sunucu hatası") }
   }
 
   const submitCreatePage = async () => {
-    // 1. GÜVENLİK VE BİLDİRİM
     if (!newPageTitle.trim()) {
         toast.error("Sayfa başlığı boş olamaz")
         return
@@ -109,9 +134,6 @@ export default function Sidebar({ isOpen, toggle }: SidebarProps) {
       if (res.ok) {
         const data = await res.json()
         navigate(`/page/${data.id}`)
-        
-        // GÜNCELLEME VE BİLDİRİM
-        fetchData()
         window.dispatchEvent(new Event('sidebar-update'))
         
         setIsCreatePageOpen(false)
@@ -120,10 +142,7 @@ export default function Sidebar({ isOpen, toggle }: SidebarProps) {
       } else {
         toast.error("Oluşturulurken hata oluştu")
       }
-    } catch (e) { 
-        console.error(e)
-        toast.error("Sunucu hatası")
-    }
+    } catch (e) { console.error(e); toast.error("Sunucu hatası") }
   }
 
   const confirmDelete = async () => {
@@ -134,21 +153,14 @@ export default function Sidebar({ isOpen, toggle }: SidebarProps) {
     try {
         const res = await fetch(`http://localhost:8000/${endpoint}/${id}`, { method: 'DELETE' })
         if (res.ok) {
-            fetchData()
-            window.dispatchEvent(new Event('sidebar-update')) // Silindiğini herkese duyur
-            
+            window.dispatchEvent(new Event('sidebar-update'))
             if (location.pathname.includes(id)) navigate('/')
             toast.success("Öğe silindi")
         } else {
             toast.error("Silinemedi")
         }
-    } catch (err) { 
-        console.error(err) 
-        toast.error("Sunucu hatası")
-    }
-    finally {
-        setDeleteTarget(null)
-    }
+    } catch (err) { console.error(err); toast.error("Sunucu hatası") }
+    finally { setDeleteTarget(null) }
   }
 
   return (
@@ -201,7 +213,24 @@ export default function Sidebar({ isOpen, toggle }: SidebarProps) {
             <div key={db.id} onClick={() => navigate(`/database/${db.id}`)} className={`flex items-center gap-2 px-4 py-1 mx-2 rounded text-sm cursor-pointer transition-colors group ${location.pathname === `/database/${db.id}` ? 'bg-[#2C2C2C] text-white' : 'text-gray-400 hover:bg-[#2C2C2C] hover:text-white'}`}>
               <span className="text-lg leading-none">{db.icon || '📁'}</span>
               <span className="truncate flex-1">{db.title}</span>
-              <button onClick={(e) => { e.stopPropagation(); setDeleteTarget({id: db.id, type: 'database'}) }} className="opacity-0 group-hover:opacity-100 text-gray-500 hover:text-red-400 transition-all p-1 hover:bg-[#373737] rounded"><Trash size={14} /></button>
+              
+              {/* --- ACTION BUTONLARI (FAVORİ + SİL) --- */}
+              <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <button 
+                    onClick={(e) => toggleFavorite(e, db)} 
+                    className={`p-1 rounded hover:bg-[#373737] transition-colors ${favoriteIds.includes(db.id) ? 'text-yellow-400 opacity-100' : 'text-gray-500 hover:text-yellow-400'}`}
+                    title="Favorilere Ekle/Çıkar"
+                  >
+                      <Star size={14} fill={favoriteIds.includes(db.id) ? "currentColor" : "none"} />
+                  </button>
+                  <button 
+                    onClick={(e) => { e.stopPropagation(); setDeleteTarget({id: db.id, type: 'database'}) }} 
+                    className="text-gray-500 hover:text-red-400 transition-colors p-1 hover:bg-[#373737] rounded"
+                    title="Sil"
+                  >
+                      <Trash size={14} />
+                  </button>
+              </div>
             </div>
           ))}
 
@@ -213,7 +242,24 @@ export default function Sidebar({ isOpen, toggle }: SidebarProps) {
             <div key={page.id} onClick={() => navigate(`/page/${page.id}`)} className={`flex items-center gap-2 px-4 py-1 mx-2 rounded text-sm cursor-pointer transition-colors group ${location.pathname === `/page/${page.id}` ? 'bg-[#2C2C2C] text-white' : 'text-gray-400 hover:bg-[#2C2C2C] hover:text-white'}`}>
               <span className="text-lg leading-none">{page.icon || '📄'}</span>
               <span className="truncate flex-1">{page.title || "İsimsiz"}</span>
-              <button onClick={(e) => { e.stopPropagation(); setDeleteTarget({id: page.id, type: 'page'}) }} className="opacity-0 group-hover:opacity-100 text-gray-500 hover:text-red-400 transition-all p-1 hover:bg-[#373737] rounded"><Trash size={14} /></button>
+              
+              {/* --- ACTION BUTONLARI (FAVORİ + SİL) --- */}
+              <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <button 
+                    onClick={(e) => toggleFavorite(e, page)} 
+                    className={`p-1 rounded hover:bg-[#373737] transition-colors ${favoriteIds.includes(page.id) ? 'text-yellow-400 opacity-100' : 'text-gray-500 hover:text-yellow-400'}`}
+                    title="Favorilere Ekle/Çıkar"
+                  >
+                      <Star size={14} fill={favoriteIds.includes(page.id) ? "currentColor" : "none"} />
+                  </button>
+                  <button 
+                    onClick={(e) => { e.stopPropagation(); setDeleteTarget({id: page.id, type: 'page'}) }} 
+                    className="text-gray-500 hover:text-red-400 transition-colors p-1 hover:bg-[#373737] rounded"
+                    title="Sil"
+                  >
+                      <Trash size={14} />
+                  </button>
+              </div>
             </div>
           ))}
         </div>
