@@ -800,26 +800,7 @@ Bu projeyi geliştirirken kullanılan kaynaklar:
 | Time to Interactive | <3s |
 | Bundle Size (gzip) | ~250KB |
 
----
 
-## 🗺️ Roadmap
-
-- [x] ~~Temel CRUD işlemleri~~
-- [x] ~~Tablo görünümü~~
-- [x] ~~Kanban panosu~~
-- [x] ~~Takvim görünümü~~
-- [x] ~~Rich text editör~~
-- [ ] Kullanıcı sistemi (Auth)
-- [ ] Real-time collaboration (WebSocket)
-- [ ] Yorum sistemi
-- [ ] Dosya ekleri
-- [ ] Template galeri
-- [ ] Mobile app (React Native)
-- [ ] Export/Import (Notion format)
-- [ ] Dark/Light mode toggle
-- [ ] Çoklu dil desteği
-
----
 
 ## 📜 Lisans
 
